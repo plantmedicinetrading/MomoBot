@@ -4,12 +4,17 @@ import os
 import threading
 import asyncio
 import logging
+from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
 from flask_socketio import SocketIO
 
 from .state import config
 from .trading.stream.alpaca_stream import AlpacaStream
+
+# ✅ Load .env file early in the app lifecycle
+load_dotenv()
+
 
 # Global shared instances
 socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")  # Explicitly use threading mode

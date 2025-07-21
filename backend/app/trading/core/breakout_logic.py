@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from ...state import ticker_states
 from ..pullbacks.tracker import PullbackTracker, Candle
 from ..core.trade_monitor import check_trade_targets  # ✅ Ensure correct import
+from ..core.execution import submit_bracket_order
 
 logger = logging.getLogger(__name__)
 

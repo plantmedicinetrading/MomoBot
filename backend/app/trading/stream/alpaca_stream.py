@@ -41,7 +41,7 @@ class AlpacaStream:
             return
 
         logger.info(f"[WS] Subscribing to {symbol} via Alpaca WebSocket...")
-        await self.stream.subscribe_quotes(self._quote_handler, symbol)
+        self.stream.subscribe_quotes(self._quote_handler, symbol)
         self.subscribed.add(symbol)
 
     async def run_forever(self):

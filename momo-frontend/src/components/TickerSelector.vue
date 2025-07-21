@@ -20,7 +20,7 @@
       <th>Bid</th>
       <th>Spread</th>
       <th>Updated</th>
-      <th>Entry Type</th>
+      <th>Entry</th>
     </tr>
   </thead>
   <tbody v-if="livePrice">
@@ -38,6 +38,13 @@
 /></td>
     </tr>
   </tbody>
+  <tbody v-else>
+  <tr>
+    <td colspan="6" style="text-align: center;">
+      ⏳ Waiting for price update...
+    </td>
+  </tr>
+</tbody>
 </n-table>
 
 <p v-if="entryType">📌 Entry Type: <strong>{{ entryType }}</strong></p>
@@ -69,8 +76,8 @@ export default {
     const entryType = ref('')
     const entryTypes = [
       'None',
-      '1-min pullback',
-      '5-min pullback'
+      '1 Min PB',
+      '5 Min PB'
     ]
 
 
@@ -149,10 +156,17 @@ export default {
       socket.on('ticker_selected', (data: any) => {
         console.log('🎯 Ticker selected:', data)
         currentTicker.value = data.ticker
+
+        // 🔄 Reset price state
+        previous.value = null
+        livePrice.value = null
+
+        // ✅ Reset Entry Type to "None"
+        entryType.value = 'None'
       })
 
       socket.on('price_update', (data: any) => {
-        console.log('📥 Price update received:', data)
+        //console.log('📥 Price update received:', data)
 
         if (data.ticker === currentTicker.value) {
           previous.value = livePrice.value

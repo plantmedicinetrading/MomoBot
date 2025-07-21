@@ -2,6 +2,7 @@ import pandas as pd
 from datetime import datetime
 import pytz
 import logging
+from ..core.execution import submit_order
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class PullbackTracker:
         #if self.pullback_active and not self.breakout_triggered:
         # logger.info(f"📈 {self.symbol} breakout level still active: {self.last_breakout_level}")
 
-    def check_tick_for_entry(self, price: float) -> bool:
+    def check_tick_for_entry(self, symbol: str, price: float) -> bool:
         if self.last_breakout_level is None or self.breakout_triggered or not self.pullback_active:
             return False
 
@@ -90,6 +91,20 @@ class PullbackTracker:
             self.pullback_active = False
             logger.info(f"✅ Tick breakout detected — price: {price}, breakout level: {self.last_breakout_level}")
             logger.info(f"🚀 Entry signal for {self.symbol} at ${price}!")
+
+           
+
+            # Define a basic size for now — later you’ll parameterize this
+            position_size = 1000  # or dynamically fetched
+
+            # Submit the order
+            submit_order(
+                symbol=symbol,
+                qty=position_size,
+                side="buy",
+                bid=bid,
+                ask=ask
+            )
             return True
 
         return False

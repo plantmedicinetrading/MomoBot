@@ -13,49 +13,52 @@
     </n-alert>
 
     <n-table bordered single-line size="small" class="quote-table">
-  <thead>
-    <tr>
-      <th>Ticker</th>
-      <th>Ask</th>
-      <th>Bid</th>
-      <th>Spread</th>
-      <th>Updated</th>
-      <th>Entry</th>
-    </tr>
-  </thead>
-  <tbody v-if="livePrice">
-    <tr :class="flashClass">
-      <td><strong>{{ livePrice.ticker }}</strong></td>
-      <td :class="colorClass('ask')">${{ livePrice.ask.toFixed(2) }}</td>
-      <td :class="colorClass('bid')">${{ livePrice.bid.toFixed(2) }}</td>
-      <td><strong>${{ spread.toFixed(2) }}</strong></td>
-      <td><n-tag type="info">{{ formattedTime }}</n-tag></td>
-      <td><n-select
-  v-model:value="entryType"
-  :options="entryTypes.map(type => ({ label: type, value: type }))"
-  placeholder="Select Entry Type"
-  class="entry-select"
-/></td>
-    </tr>
-  </tbody>
-  <tbody v-else>
-  <tr>
-    <td colspan="6" style="text-align: center;">
-      ⏳ Waiting for price update...
-    </td>
-  </tr>
-</tbody>
-</n-table>
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Ask</th>
+          <th>Bid</th>
+          <th>Spread</th>
+          <th>Updated</th>
+          <th>Entry</th>
+        </tr>
+      </thead>
+      <tbody v-if="livePrice">
+        <tr :class="flashClass">
+          <td><strong>{{ livePrice.ticker }}</strong></td>
+          <td :class="colorClass('ask')">${{ livePrice.ask.toFixed(2) }}</td>
+          <td :class="colorClass('bid')">${{ livePrice.bid.toFixed(2) }}</td>
+          <td><strong>${{ spread.toFixed(2) }}</strong></td>
+          <td><n-tag type="info">{{ formattedTime }}</n-tag></td>
+          <td>
+            <n-select
+              v-model:value="entryType"
+              :options="entryTypes.map(type => ({ label: type, value: type }))"
+              placeholder="Select Entry Type"
+              class="entry-select"
+            />
+          </td>
+        </tr>
+      </tbody>
+      <tbody v-else>
+        <tr>
+          <td colspan="6" style="text-align: center;">
+            ⏳ Waiting for price update...
+          </td>
+        </tr>
+      </tbody>
+    </n-table>
 
-<p v-if="entryType">📌 Entry Type: <strong>{{ entryType }}</strong></p>
-
+    <p v-if="entryType">📌 Entry Type: <strong>{{ entryType }}</strong></p>
   </n-card>
 </template>
 
 <script lang="ts">
-import { ref, onMounted, computed, watch, reactive } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { io, Socket } from 'socket.io-client'
-import { NCard, NInput, NButton, NStatistic, NTag, NAlert, NTable, NSelect } from 'naive-ui'
+import {
+  NCard, NInput, NButton, NTag, NAlert, NTable, NSelect
+} from 'naive-ui'
 
 let socket: Socket
 
@@ -64,7 +67,6 @@ export default {
     NCard,
     NInput,
     NButton,
-    NStatistic,
     NTag,
     NAlert,
     NTable,
@@ -74,33 +76,7 @@ export default {
     const ticker = ref('')
     const currentTicker = ref<string | null>(null)
     const entryType = ref('')
-    const entryTypes = [
-      'None',
-      '1 Min PB',
-      '5 Min PB'
-    ]
-
-
-    const entryTypesMap = reactive<Record<string, string>>({})
-
-      watch(entryType, (newValue) => {
-        if (currentTicker.value) {
-          entryTypesMap[currentTicker.value] = newValue
-        }
-      })
-    const colorClass = (type: 'ask' | 'bid') => {
-    if (!previous.value || !livePrice.value) return ''
-    const prev = previous.value[type]
-    const now = livePrice.value[type]
-    return now > prev ? 'price-up' : now < prev ? 'price-down' : ''
-  }
-
-  const formattedTime = computed(() => {
-    if (!livePrice.value?.timestamp) return ''
-    return new Date(livePrice.value.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  })
-
-  
+    const entryTypes = ['None', '10 Sec PB', '1 Min PB', '5 Min PB']
 
     const livePrice = ref<{
       ticker: string
@@ -112,37 +88,52 @@ export default {
     } | null>(null)
 
     const previous = ref<{ ask: number; bid: number } | null>(null)
+    const flashClass = ref('')
 
     const submitTicker = () => {
       if (!ticker.value) return
       socket.emit('select_ticker', ticker.value)
     }
 
+    const colorClass = (type: 'ask' | 'bid') => {
+      if (!previous.value || !livePrice.value) return ''
+      const prev = previous.value[type]
+      const now = livePrice.value[type]
+      return now > prev ? 'price-up' : now < prev ? 'price-down' : ''
+    }
+
+    const formattedTime = computed(() => {
+      if (!livePrice.value?.timestamp) return ''
+      return new Date(livePrice.value.timestamp).toLocaleTimeString('en-US', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      })
+    })
+
     const spread = computed(() => {
       if (!livePrice.value) return 0
       return livePrice.value.ask - livePrice.value.bid
     })
 
-    const askColor = computed(() => {
-      if (!previous.value || !livePrice.value) return ''
-      return livePrice.value.ask > previous.value.ask ? 'green' : 'red'
+    // 🔁 Flash on price update
+    watch(livePrice, () => {
+      flashClass.value = 'flash'
+      setTimeout(() => { flashClass.value = '' }, 300)
     })
 
-    const bidColor = computed(() => {
-      if (!previous.value || !livePrice.value) return ''
-      return livePrice.value.bid > previous.value.bid ? 'green' : 'red'
+    // 🔁 Emit entry type to backend when changed
+    watch(entryType, (newValue) => {
+      if (currentTicker.value && newValue !== 'None') {
+        const mapped = newValue === '10 Sec PB' ? '10s' :
+                       newValue === '1 Min PB' ? '1m' :
+                       newValue === '5 Min PB' ? '5m' : ''
+        if (mapped) {
+          socket.emit('set_entry_type', {
+            symbol: currentTicker.value,
+            entry_type: mapped
+          })
+        }
+      }
     })
-
-    const flashClass = ref('')
-
-
-      // Trigger flash effect on price update
-      watch(livePrice, () => {
-        flashClass.value = 'flash'
-        setTimeout(() => {
-          flashClass.value = ''
-        }, 300) // Flash lasts 300ms
-      })
 
     onMounted(() => {
       socket = io('http://localhost:5050')
@@ -150,29 +141,21 @@ export default {
 
       socket.on('connect', () => {
         console.log('✅ Connected to socket server')
-        socket.emit('get_selected_ticker')
       })
 
       socket.on('ticker_selected', (data: any) => {
         console.log('🎯 Ticker selected:', data)
         currentTicker.value = data.ticker
-
-        // 🔄 Reset price state
         previous.value = null
         livePrice.value = null
-
-        // ✅ Reset Entry Type to "None"
         entryType.value = 'None'
       })
 
       socket.on('price_update', (data: any) => {
-        //console.log('📥 Price update received:', data)
-
         if (data.ticker === currentTicker.value) {
           previous.value = livePrice.value
             ? { ask: livePrice.value.ask, bid: livePrice.value.bid }
             : { ask: data.ask, bid: data.bid }
-
           livePrice.value = data
         }
       })
@@ -184,14 +167,11 @@ export default {
       currentTicker,
       livePrice,
       spread,
-      askColor,
-      bidColor,
       colorClass,
       formattedTime,
       flashClass,
       entryType,
-      entryTypes,
-      entryTypesMap
+      entryTypes
     }
   }
 }
@@ -211,8 +191,25 @@ export default {
   margin-top: 1rem;
 }
 
-.quote-card {
+.quote-table {
   margin-top: 1rem;
   background-color: #fafafa;
+}
+
+.price-up {
+  background-color: #d6f5d6;
+}
+
+.price-down {
+  background-color: #fbdcdc;
+}
+
+.flash {
+  animation: flashFade 0.3s;
+}
+
+@keyframes flashFade {
+  0% { background-color: #fffae6; }
+  100% { background-color: transparent; }
 }
 </style>

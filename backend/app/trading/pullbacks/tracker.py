@@ -1,6 +1,9 @@
 import pandas as pd
 from datetime import datetime
 import pytz
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Candle:
     def __init__(self, timestamp, open, high, low, close, volume):
@@ -52,7 +55,7 @@ class PullbackTracker:
         formatted_time = ny_time.strftime('%I:%M %p ET')
 
         if self.last_logged_minute != latest_minute:
-            print(f"🕒 Finalized candle for {self.symbol} at {formatted_time} → Close: {latest['close']}, High: {latest['high']}")
+            logger.info(f"🕒 Finalized candle for {self.symbol} at {formatted_time} → Close: {latest['close']}, High: {latest['high']}")
             self.last_logged_minute = latest_minute
 
         # Step 1: Detect pullback (close < previous close)
@@ -61,21 +64,21 @@ class PullbackTracker:
                 self.last_breakout_level = latest["high"]
                 self.pullback_active = True
                 self.breakout_triggered = False
-                print(f"🔍 New pullback started on {self.symbol} — breakout level set to {self.last_breakout_level}")
+                logger.info(f"🔍 New pullback started on {self.symbol} — breakout level set to {self.last_breakout_level}")
             else:
                 if latest["high"] < self.last_breakout_level:
                     self.last_breakout_level = latest["high"]
-                    print(f"🔽 Lower high detected — adjusting breakout level for {self.symbol} to {self.last_breakout_level}")
+                    logger.info(f"🔽 Lower high detected — adjusting breakout level for {self.symbol} to {self.last_breakout_level}")
 
         # Step 2: Even if not a new pullback, still check for lower highs
         elif self.pullback_active and not self.breakout_triggered:
             if latest["high"] < self.last_breakout_level:
                 self.last_breakout_level = latest["high"]
-                print(f"🔽 Lower high detected — adjusting breakout level for {self.symbol} to {self.last_breakout_level}")
+                logger.info(f"🔽 Lower high detected — adjusting breakout level for {self.symbol} to {self.last_breakout_level}")
 
         # Step 3: Log active breakout level
-        if self.pullback_active and not self.breakout_triggered:
-            print(f"📈 {self.symbol} breakout level still active: {self.last_breakout_level}")
+        #if self.pullback_active and not self.breakout_triggered:
+        # logger.info(f"📈 {self.symbol} breakout level still active: {self.last_breakout_level}")
 
     def check_tick_for_entry(self, price: float) -> bool:
         if self.last_breakout_level is None or self.breakout_triggered or not self.pullback_active:
@@ -85,8 +88,8 @@ class PullbackTracker:
             self.breakout_triggered = True
             self.last_breakout_index = len(self.df) - 1
             self.pullback_active = False
-            print(f"✅ Tick breakout detected — price: {price}, breakout level: {self.last_breakout_level}")
-            print(f"🚀 Entry signal for {self.symbol} at ${price}!")
+            logger.info(f"✅ Tick breakout detected — price: {price}, breakout level: {self.last_breakout_level}")
+            logger.info(f"🚀 Entry signal for {self.symbol} at ${price}!")
             return True
 
         return False

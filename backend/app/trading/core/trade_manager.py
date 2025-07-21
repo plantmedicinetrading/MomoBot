@@ -14,7 +14,7 @@ def handle_breakout_trigger(symbol: str, entry_price: float, entry_type: str):
     state = ticker_states[symbol]
 
     # Example size — this should be configurable per symbol
-    position_size = state.get("position_size", 100)
+    position_size = state.get("position_size", 1000)
 
     # TP/SL rules
     tp1 = round(entry_price + 0.10, 2)

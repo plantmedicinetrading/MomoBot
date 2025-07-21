@@ -1,28 +1,20 @@
+# app/trading/core/execution.py
+
 import logging
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import LimitOrderRequest, StopLimitOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderType
 
-from ...state import config
+from ...state import config, ticker_states
 
 logger = logging.getLogger(__name__)
 
-def submit_bracket_order(
-    symbol: str,
-    entry_price: float,
-    size: int,
-    tp1: float,
-    tp2: float,
-    stop: float
-):
-    """
-    Submits a buy limit order with manual take-profit and stop-loss logic.
-    This does NOT use Alpaca's native bracket order (for more control).
-    """
+def submit_bracket_order(symbol, entry_price, size, tp1, tp2, stop):
     client = TradingClient(config["ALPACA_API_KEY"], config["ALPACA_SECRET_KEY"], paper=True)
 
-    limit_price = round(entry_price + 0.05, 2)  # Offset entry like DAS
-    order = LimitOrderRequest(
+    limit_price = round(entry_price + 0.05, 2)
+
+    entry_order = LimitOrderRequest(
         symbol=symbol,
         qty=size,
         side=OrderSide.BUY,
@@ -32,58 +24,46 @@ def submit_bracket_order(
     )
 
     try:
-        submitted = client.submit_order(order)
+        submitted = client.submit_order(entry_order)
         logger.info(f"[{symbol}] Entry order submitted: {submitted.id}")
+
+        # ✅ Track the position immediately
+        ticker_states[symbol]["position"] = {
+            "entry_price": entry_price,
+            "size": size,
+            "tp1": tp1,
+            "tp2": tp2,
+            "stop": stop,
+            "tp1_hit": False,
+            "tp2_hit": False,
+            "sl_hit": False,
+            "status": "open"
+        }
+
+        # Submit TP1 and TP2 limit sells (half size each)
+        half = size // 2
+        for target_price in [tp1, tp2]:
+            tp_order = LimitOrderRequest(
+                symbol=symbol,
+                qty=half,
+                side=OrderSide.SELL,
+                time_in_force=TimeInForce.DAY,
+                limit_price=round(target_price, 2)
+            )
+            client.submit_order(tp_order)
+            logger.info(f"[{symbol}] Take profit order submitted at {target_price}")
+
+        # Submit SL stop-limit sell for full position
+        sl_order = StopLimitOrderRequest(
+            symbol=symbol,
+            qty=size,
+            side=OrderSide.SELL,
+            time_in_force=TimeInForce.DAY,
+            stop_price=round(stop, 2),
+            limit_price=round(stop - 0.05, 2)
+        )
+        client.submit_order(sl_order)
+        logger.info(f"[{symbol}] Stop-limit order submitted at {stop}")
+
     except Exception as e:
-        logger.exception(f"[{symbol}] Failed to submit order", exc_info=e)
-
-def submit_order(symbol, qty, side, bid=None, ask=None):
-    """
-    Submits a limit order based on side and current bid/ask, with 5-cent offset.
-    """
-    if bid is None or ask is None:
-        logger.error(f"[{symbol}] ❌ Missing bid/ask prices for limit order.")
-        return None
-
-    limit_price = round((ask + 0.05) if side == "buy" else (bid - 0.05), 2)
-
-    order_data = LimitOrderRequest(
-        symbol=symbol,
-        qty=qty,
-        side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
-        time_in_force=TimeInForce.DAY,
-        limit_price=limit_price,
-        extended_hours=True,
-    )
-
-    try:
-        client = TradingClient(config["ALPACA_API_KEY"], config["ALPACA_SECRET_KEY"], paper=True)
-        order = client.submit_order(order_data)
-        logger.info(f"📤 Limit order submitted for {symbol} — side: {side}, qty: {qty}, limit: {limit_price}")
-        return order
-    except Exception as e:
-        logger.error(f"❌ Failed to submit limit order for {symbol}: {e}")
-        return None
-
-def submit_stop_limit_order(symbol, qty, stop_price, limit_price):
-    """
-    Submits a stop-limit order to Alpaca for use as manual SL.
-    """
-    order_data = StopLimitOrderRequest(
-        symbol=symbol,
-        qty=qty,
-        side=OrderSide.SELL,
-        time_in_force=TimeInForce.DAY,
-        stop_price=round(stop_price, 2),
-        limit_price=round(limit_price, 2),
-        extended_hours=True,
-    )
-
-    try:
-        client = TradingClient(config["ALPACA_API_KEY"], config["ALPACA_SECRET_KEY"], paper=True)
-        order = client.submit_order(order_data)
-        logger.info(f"🛑 Stop-limit submitted for {symbol} — stop: {stop_price}, limit: {limit_price}, qty: {qty}")
-        return order
-    except Exception as e:
-        logger.error(f"❌ Failed to submit stop-limit order for {symbol}: {e}")
-        return None
+        logger.exception(f"[{symbol}] Failed to submit bracket orders", exc_info=e)

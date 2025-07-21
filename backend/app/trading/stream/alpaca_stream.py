@@ -15,52 +15,54 @@ from ..core.trade_update import handle_trade_update
 
 logger = logging.getLogger(__name__)
 
-
 class AlpacaStream:
     def __init__(self):
-        self.quote_stream = None
+        self.data_stream = None
         self.trade_stream = None
         self._quote_handlers = {}
         self._active_symbol = None
-        self._socketio = None  # Optional: for frontend updates
+        self._socketio = None
 
     def set_socketio(self, socketio):
         self._socketio = socketio
 
     async def subscribe_to_ticker(self, symbol):
+        await self._init_streams_if_needed()  # This must run first!
+
         if self._active_symbol:
             logger.info(f"[WS] Unsubscribing from {self._active_symbol}...")
             await self._unsubscribe_from_symbol(self._active_symbol)
 
-            logger.info(f"[WS] Subscribing to {symbol} via Alpaca WebSocket...")
-            await self._init_streams_if_needed()
+        logger.info(f"[WS] Subscribing to {symbol} via Alpaca WebSocket...")
+        self._active_symbol = symbol
 
-            self._active_symbol = symbol
+        async def handler(quote):
+            await self._quote_handler(quote)
 
-            # Define sync wrapper early and register it before subscribing
-            def sync_wrapper(quote):
-                asyncio.get_event_loop().create_task(self._quote_handler(quote))
+        self._quote_handlers[symbol] = handler
 
-            self._quote_handlers[symbol] = sync_wrapper
-
-            # ✅ Use `subscribe_quotes` AFTER storing the handler
-            await self.quote_stream.subscribe_quotes(sync_wrapper, symbol)
-            await self.trade_stream.subscribe_trade_updates(self._order_update_handler)
+        assert self.data_stream is not None, "data_stream not initialized"
+        assert self.trade_stream is not None, "trade_stream not initialized"
+        self.data_stream.subscribe_quotes(handler, symbol)
+        self.trade_stream.subscribe_trade_updates(self._order_update_handler)
 
     async def _unsubscribe_from_symbol(self, symbol):
+        assert self.data_stream is not None, "data_stream not initialized"
         if symbol in self._quote_handlers:
-            await self.quote_stream.unsubscribe_quotes(symbol)
+            self.data_stream.unsubscribe_quotes(symbol)
             del self._quote_handlers[symbol]
 
     async def _init_streams_if_needed(self):
-        if not self.quote_stream:
-            self.quote_stream = StockDataStream(
+        if not self.data_stream:
+            logger.info("🧩 Initializing StockDataStream...")
+            self.data_stream = StockDataStream(
                 config["ALPACA_API_KEY"],
                 config["ALPACA_SECRET_KEY"],
                 feed=DataFeed(config["ALPACA_FEED"])
             )
 
         if not self.trade_stream:
+            logger.info("🧩 Initializing Trade Stream...")
             self.trade_stream = Stream(
                 key_id=config["ALPACA_API_KEY"],
                 secret_key=config["ALPACA_SECRET_KEY"],
@@ -69,11 +71,12 @@ class AlpacaStream:
             )
 
     async def _quote_handler(self, quote: Quote):
+        #logger.info(f"📥 Quote handler triggered for {quote.symbol}")
         symbol = quote.symbol
         bid = quote.bid_price
         ask = quote.ask_price
         midpoint = (bid + ask) / 2
-        logger.info(f"[RECEIVED QUOTE] {symbol} bid={bid}, ask={ask}, midpoint={midpoint}")  # CHANGED: info log
+        #logger.info(f"[RECEIVED QUOTE] {symbol} bid={bid}, ask={ask}, midpoint={midpoint}")
 
         try:
             process_quote_for_breakout(symbol, quote)
@@ -82,14 +85,18 @@ class AlpacaStream:
 
     async def _order_update_handler(self, update):
         try:
-            await handle_trade_update(update)
+            handle_trade_update(update)
         except Exception as e:
             logger.exception("❌ Error handling trade update", exc_info=e)
 
     async def run_forever(self):
+        logger.info("✅ WebSocket run_forever coroutine started")
         await self._init_streams_if_needed()
+        assert self.data_stream is not None, "data_stream not initialized"
+        assert self.trade_stream is not None, "trade_stream not initialized"
         logger.info("🚀 Starting Alpaca WebSocket streams...")
         await asyncio.gather(
-            self.quote_stream._run_forever(),
+            self.data_stream._run_forever(),
             self.trade_stream._run_forever()
         )
+        logger.info("❌ WebSocket streams exited unexpectedly.")

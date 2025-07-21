@@ -1,6 +1,7 @@
 # app/__main__.py
 
 from . import create_app, socketio
+import logging
 
 if __name__ == "__main__":
     app = create_app()
@@ -8,4 +9,4 @@ if __name__ == "__main__":
     try:
         socketio.run(app, host="0.0.0.0", port=5050)
     except Exception as e:
-        print(f"🔥 Server error: {e}")
+        logging.exception("🔥 Server error:")

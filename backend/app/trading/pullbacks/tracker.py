@@ -18,7 +18,7 @@ class Candle:
 class PullbackTracker:
     def __init__(self, symbol):
         self.symbol = symbol
-        self.df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+        self.df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])  # type: ignore
         self.last_breakout_level = None
         self.breakout_triggered = False
         self.last_breakout_index = -1
@@ -98,6 +98,9 @@ class PullbackTracker:
             position_size = 1000  # or dynamically fetched
 
             # Submit the order
+            if bid is None or ask is None:
+                return False  # or handle as appropriate
+
             submit_order(
                 symbol=symbol,
                 qty=position_size,

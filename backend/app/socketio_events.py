@@ -6,6 +6,7 @@ from . import alpaca_stream, alpaca_loop
 from .state import ticker_states
 from .trading.pullbacks.tracker import PullbackTracker, Candle
 from datetime import datetime
+from typing import Any
 
 pullback_trackers = {}
 entry_types_map = {}

@@ -1,5 +1,3 @@
-# app/__init__.py
-
 import os
 import threading
 import asyncio
@@ -12,24 +10,19 @@ from flask_socketio import SocketIO
 from .state import config
 from .trading.stream.alpaca_stream import AlpacaStream
 
-# Global shared instances
-socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")  # Explicitly use threading mode
-alpaca_stream = AlpacaStream()  # ✅ Fixed: No args needed, config is used internally
+load_dotenv()
 
-# Set up logging for the entire backend
+# Global shared instances
+socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")
+alpaca_stream = AlpacaStream()
+
+# Set up logging
 logging.basicConfig(
-    level=logging.INFO,  # Change to DEBUG if you want more detailed output
+    level=logging.INFO,
     format='[%(asctime)s] %(levelname)s in %(name)s: %(message)s'
 )
 
-# This will hold the shared event loop
 alpaca_loop = None
-
-async def run_forever(self):
-    await asyncio.gather(
-        self.quote_stream._run_forever(),
-        self.trade_stream._run_forever(),
-    )
 
 def start_alpaca_event_loop():
     global alpaca_loop
@@ -49,10 +42,8 @@ def create_app():
     CORS(app)
     socketio.init_app(app)
 
-    # Start Alpaca streaming loop in background thread
     threading.Thread(target=start_alpaca_event_loop, daemon=True).start()
 
-    # Register routes and events
     from .routes import main_bp
     from .socketio_events import register_socket_events
 
@@ -60,11 +51,3 @@ def create_app():
     register_socket_events(socketio)
 
     return app
-
-if __name__ == "__main__":
-    app = create_app()
-    print("🚀 Starting Momo Bot backend via __main__.py...")
-    try:
-        socketio.run(app, host="0.0.0.0", port=5050)
-    except Exception as e:
-        print(f"🔥 Server error: {e}")

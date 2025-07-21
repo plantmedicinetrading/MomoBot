@@ -32,17 +32,24 @@ class AlpacaStream:
             logger.info(f"[WS] Unsubscribing from {self._active_symbol}...")
             await self._unsubscribe_from_symbol(self._active_symbol)
 
-        logger.info(f"[WS] Subscribing to {symbol} via Alpaca WebSocket...")
-        await self._init_streams_if_needed()
+            logger.info(f"[WS] Subscribing to {symbol} via Alpaca WebSocket...")
+            await self._init_streams_if_needed()
 
-        self._active_symbol = symbol
-        self._quote_handlers[symbol] = self._quote_handler
-        self.quote_stream.subscribe_quotes(self._quote_handlers[symbol], symbol)
-        self.trade_stream.subscribe_trade_updates(self._order_update_handler)
+            self._active_symbol = symbol
+
+            # Define sync wrapper early and register it before subscribing
+            def sync_wrapper(quote):
+                asyncio.get_event_loop().create_task(self._quote_handler(quote))
+
+            self._quote_handlers[symbol] = sync_wrapper
+
+            # ✅ Use `subscribe_quotes` AFTER storing the handler
+            await self.quote_stream.subscribe_quotes(sync_wrapper, symbol)
+            await self.trade_stream.subscribe_trade_updates(self._order_update_handler)
 
     async def _unsubscribe_from_symbol(self, symbol):
         if symbol in self._quote_handlers:
-            self.quote_stream.unsubscribe_quotes(symbol)
+            await self.quote_stream.unsubscribe_quotes(symbol)
             del self._quote_handlers[symbol]
 
     async def _init_streams_if_needed(self):
@@ -50,7 +57,7 @@ class AlpacaStream:
             self.quote_stream = StockDataStream(
                 config["ALPACA_API_KEY"],
                 config["ALPACA_SECRET_KEY"],
-                feed=DataFeed(config["ALPACA_FEED"])  # 👈 Cast string to enum
+                feed=DataFeed(config["ALPACA_FEED"])
             )
 
         if not self.trade_stream:
@@ -66,7 +73,8 @@ class AlpacaStream:
         bid = quote.bid_price
         ask = quote.ask_price
         midpoint = (bid + ask) / 2
-        logger.debug(f"[QUOTE] {symbol} bid={bid}, ask={ask}, midpoint={midpoint}")
+        logger.info(f"[RECEIVED QUOTE] {symbol} bid={bid}, ask={ask}, midpoint={midpoint}")  # CHANGED: info log
+
         try:
             process_quote_for_breakout(symbol, quote)
         except Exception as e:

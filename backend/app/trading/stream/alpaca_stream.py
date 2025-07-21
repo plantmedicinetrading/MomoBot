@@ -2,86 +2,86 @@
 
 import asyncio
 import logging
-from datetime import datetime
-from alpaca.data.live import StockDataStream
-from alpaca.data.enums import DataFeed
-from alpaca.data.models import Quote
 
-from ...state import config, ticker_states
-from ..core.candle_builder import handle_new_quote
+from alpaca.data.live import StockDataStream
+from alpaca.data.models import Quote
+from alpaca_trade_api.stream import Stream
+from alpaca_trade_api.common import URL
+from alpaca.data.enums import DataFeed
+
+from ...state import config
 from ..core.breakout_logic import process_quote_for_breakout
+from ..core.trade_update import handle_trade_update
 
 logger = logging.getLogger(__name__)
 
+
 class AlpacaStream:
-    """Handles real-time Alpaca WebSocket quote streaming."""
+    def __init__(self):
+        self.quote_stream = None
+        self.trade_stream = None
+        self._quote_handlers = {}
+        self._active_symbol = None
+        self._socketio = None  # Optional: for frontend updates
 
-    def __init__(self, api_key: str, secret_key: str):
-        self.api_key = api_key
-        self.secret_key = secret_key
-        self.socketio = None  # 👈 Will be injected later
+    def set_socketio(self, socketio):
+        self._socketio = socketio
 
-        # Determine feed type (sip or iex)
-        feed_str = config.get("ALPACA_FEED", "sip").lower()
-        if feed_str not in ["iex", "sip"]:
-            raise ValueError("ALPACA_FEED must be either 'iex' or 'sip'")
-
-        feed = DataFeed.IEX if feed_str == "iex" else DataFeed.SIP
-        self.stream = StockDataStream(api_key, secret_key, feed=feed, raw_data=False)
-        self.subscribed = set()
-
-    def set_socketio(self, socketio_instance):
-        """Inject socketio instance for emitting."""
-        self.socketio = socketio_instance
-
-    async def subscribe_to_ticker(self, symbol: str):
-        """Subscribes to quote updates for a specific ticker."""
-        if symbol in self.subscribed:
-            logger.info(f"[WS] Already subscribed to {symbol}")
-            return
+    async def subscribe_to_ticker(self, symbol):
+        if self._active_symbol:
+            logger.info(f"[WS] Unsubscribing from {self._active_symbol}...")
+            await self._unsubscribe_from_symbol(self._active_symbol)
 
         logger.info(f"[WS] Subscribing to {symbol} via Alpaca WebSocket...")
-        self.stream.subscribe_quotes(self._quote_handler, symbol)
-        self.subscribed.add(symbol)
+        await self._init_streams_if_needed()
 
-    async def run_forever(self):
-        """Starts the Alpaca WebSocket stream."""
-        try:
-            logger.info("🔄 Starting Alpaca WebSocket stream...")
-            await self.stream._run_forever()
-        except Exception as e:
-            logger.exception("💥 Alpaca stream crashed", exc_info=e)
+        self._active_symbol = symbol
+        self._quote_handlers[symbol] = self._quote_handler
+        self.quote_stream.subscribe_quotes(self._quote_handlers[symbol], symbol)
+        self.trade_stream.subscribe_trade_updates(self._order_update_handler)
+
+    async def _unsubscribe_from_symbol(self, symbol):
+        if symbol in self._quote_handlers:
+            self.quote_stream.unsubscribe_quotes(symbol)
+            del self._quote_handlers[symbol]
+
+    async def _init_streams_if_needed(self):
+        if not self.quote_stream:
+            self.quote_stream = StockDataStream(
+                config["ALPACA_API_KEY"],
+                config["ALPACA_SECRET_KEY"],
+                feed=DataFeed(config["ALPACA_FEED"])  # 👈 Cast string to enum
+            )
+
+        if not self.trade_stream:
+            self.trade_stream = Stream(
+                key_id=config["ALPACA_API_KEY"],
+                secret_key=config["ALPACA_SECRET_KEY"],
+                base_url=URL(config["ALPACA_BASE_URL"]),
+                data_feed=config["ALPACA_FEED"]
+            )
 
     async def _quote_handler(self, quote: Quote):
-        """Processes incoming quote data for a ticker."""
         symbol = quote.symbol
-
-        bid = getattr(quote, "bid_price", None)
-        ask = getattr(quote, "ask_price", None)
-
-        if bid is None or ask is None:
-            logger.warning(f"[{symbol}] Ignoring quote with missing bid/ask → bid: {bid}, ask: {ask}")
-            return
-
-        logger.debug(f"[WS] Quote received for {symbol} → Bid: {bid}, Ask: {ask}")
-
-        if symbol not in ticker_states:
-            logger.debug(f"⚠️ Received quote for unsubscribed ticker: {symbol}")
-            return
-
+        bid = quote.bid_price
+        ask = quote.ask_price
+        midpoint = (bid + ask) / 2
+        logger.debug(f"[QUOTE] {symbol} bid={bid}, ask={ask}, midpoint={midpoint}")
         try:
-            handle_new_quote(symbol, quote)
             process_quote_for_breakout(symbol, quote)
-
-            # Emit quote data to frontend
-            if self.socketio:
-                self.socketio.emit('price_update', {
-                    "ticker": symbol,
-                    "ask": ask,
-                    "ask_size": quote.ask_size,
-                    "bid": bid,
-                    "bid_size": quote.bid_size,
-                    "timestamp": datetime.utcnow().isoformat()
-                })
         except Exception as e:
             logger.exception(f"❌ Error handling quote for {symbol}", exc_info=e)
+
+    async def _order_update_handler(self, update):
+        try:
+            await handle_trade_update(update)
+        except Exception as e:
+            logger.exception("❌ Error handling trade update", exc_info=e)
+
+    async def run_forever(self):
+        await self._init_streams_if_needed()
+        logger.info("🚀 Starting Alpaca WebSocket streams...")
+        await asyncio.gather(
+            self.quote_stream._run_forever(),
+            self.trade_stream._run_forever()
+        )

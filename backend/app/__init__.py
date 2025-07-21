@@ -14,10 +14,7 @@ from .trading.stream.alpaca_stream import AlpacaStream
 
 # Global shared instances
 socketio = SocketIO(cors_allowed_origins="*", async_mode="threading")  # Explicitly use threading mode
-alpaca_stream = AlpacaStream(
-    api_key=config["ALPACA_API_KEY"],
-    secret_key=config["ALPACA_SECRET_KEY"]
-)
+alpaca_stream = AlpacaStream()  # ✅ Fixed: No args needed, config is used internally
 
 # Set up logging for the entire backend
 logging.basicConfig(
@@ -27,6 +24,12 @@ logging.basicConfig(
 
 # This will hold the shared event loop
 alpaca_loop = None
+
+async def run_forever(self):
+    await asyncio.gather(
+        self.quote_stream._run_forever(),
+        self.trade_stream._run_forever(),
+    )
 
 def start_alpaca_event_loop():
     global alpaca_loop

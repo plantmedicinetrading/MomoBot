@@ -81,7 +81,7 @@ class PullbackTracker:
         #if self.pullback_active and not self.breakout_triggered:
         # logger.info(f"📈 {self.symbol} breakout level still active: {self.last_breakout_level}")
 
-    def check_tick_for_entry(self, symbol: str, price: float) -> bool:
+    def check_tick_for_entry(self, symbol: str, price: float, bid=None, ask=None) -> bool:
         if self.last_breakout_level is None or self.breakout_triggered or not self.pullback_active:
             return False
 

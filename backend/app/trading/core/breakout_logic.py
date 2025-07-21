@@ -39,7 +39,7 @@ def process_quote_for_breakout(symbol: str, quote):
 
     # ✅ Calculate midpoint and check for breakout
     midpoint = (bid + ask) / 2
-    breakout_hit = tracker.check_tick_for_entry(symbol, midpoint)
+    breakout_hit = tracker.check_tick_for_entry(symbol, midpoint, bid, ask)
 
     # ✅ If we're in a trade, check TP1/TP2/SL
     position = state.get("position")

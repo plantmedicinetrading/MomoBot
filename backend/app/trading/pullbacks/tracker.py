@@ -3,6 +3,7 @@ from datetime import datetime
 import pytz
 import logging
 from ..core.execution import submit_order
+from ..core.trade_manager import handle_breakout_trigger
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +17,9 @@ class Candle:
         self.volume = volume
 
 class PullbackTracker:
-    def __init__(self, symbol):
+    def __init__(self, symbol, interval="1m"):
         self.symbol = symbol
+        self.interval = interval
         self.df = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])  # type: ignore
         self.last_breakout_level = None
         self.breakout_triggered = False
@@ -56,7 +58,7 @@ class PullbackTracker:
         formatted_time = ny_time.strftime('%I:%M %p ET')
 
         if self.last_logged_minute != latest_minute:
-            logger.info(f"🕒 Finalized candle for {self.symbol} at {formatted_time} → Close: {latest['close']}, High: {latest['high']}")
+            logger.info(f"🕒 Finalized {self.interval} candle for {self.symbol} at {formatted_time} → Close: {latest['close']}, High: {latest['high']}")
             self.last_logged_minute = latest_minute
 
         # Step 1: Detect pullback (close < previous close)
@@ -65,23 +67,29 @@ class PullbackTracker:
                 self.last_breakout_level = latest["high"]
                 self.pullback_active = True
                 self.breakout_triggered = False
-                logger.info(f"🔍 New pullback started on {self.symbol} — breakout level set to {self.last_breakout_level}")
+                logger.info(f"🔍 New pullback started on {self.symbol} ({self.interval}) — breakout level set to {self.last_breakout_level}")
             else:
                 if latest["high"] < self.last_breakout_level:
                     self.last_breakout_level = latest["high"]
-                    logger.info(f"🔽 Lower high detected — adjusting breakout level for {self.symbol} to {self.last_breakout_level}")
+                    logger.info(f"🔽 Lower high detected ({self.interval}) — adjusting breakout level for {self.symbol} to {self.last_breakout_level}")
 
         # Step 2: Even if not a new pullback, still check for lower highs
         elif self.pullback_active and not self.breakout_triggered:
             if latest["high"] < self.last_breakout_level:
                 self.last_breakout_level = latest["high"]
-                logger.info(f"🔽 Lower high detected — adjusting breakout level for {self.symbol} to {self.last_breakout_level}")
+                logger.info(f"🔽 Lower high detected ({self.interval}) — adjusting breakout level for {self.symbol} to {self.last_breakout_level}")
 
         # Step 3: Log active breakout level
         #if self.pullback_active and not self.breakout_triggered:
         # logger.info(f"📈 {self.symbol} breakout level still active: {self.last_breakout_level}")
 
     def check_tick_for_entry(self, symbol: str, price: float, bid=None, ask=None) -> bool:
+        from ...shared_state import ticker_states
+        state = ticker_states.get(symbol)
+        # Only emit/trigger breakouts if this tracker's interval matches the active_entry_type
+        if state is not None and state.get("active_entry_type") != self.interval:
+            # Still update state, but do not emit entry signals
+            return False
         if self.last_breakout_level is None or self.breakout_triggered or not self.pullback_active:
             return False
 
@@ -91,7 +99,7 @@ class PullbackTracker:
             self.pullback_active = False
             logger.info(f"✅ Tick breakout detected — price: {price}, breakout level: {self.last_breakout_level}")
             logger.info(f"🚀 Entry signal for {self.symbol} at ${price}!")
-
+            
            
 
             # Define a basic size for now — later you’ll parameterize this
@@ -101,13 +109,10 @@ class PullbackTracker:
             if bid is None or ask is None:
                 return False  # or handle as appropriate
 
-            submit_order(
-                symbol=symbol,
-                qty=position_size,
-                side="buy",
-                bid=bid,
-                ask=ask
-            )
+            from ..core.trade_manager import handle_breakout_trigger
+            handle_breakout_trigger(symbol, price, self.interval, bid, ask)
+
+            
             return True
 
         return False

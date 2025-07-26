@@ -1,7 +1,7 @@
 <template>
   <n-card title="Stock Ticker" class="momo-card">
     <n-input
-      v-model:value="ticker"
+      v-model:value="ticker" 
       placeholder="Enter Ticker (e.g. SBET)"
       @keyup.enter="submitTicker"
       clearable
@@ -12,24 +12,30 @@
       Selected: <strong>{{ currentTicker }}</strong>
     </n-alert>
 
-    <n-table bordered single-line size="small" class="quote-table">
-      <thead>
+    <n-table bordered single-line size="small" class="quote-table-vertical">
+      <tbody v-if="livePrice">
         <tr>
           <th>Ticker</th>
-          <th>Ask</th>
-          <th>Bid</th>
-          <th>Spread</th>
-          <th>Updated</th>
-          <th>Entry</th>
-        </tr>
-      </thead>
-      <tbody v-if="livePrice">
-        <tr :class="flashClass">
           <td><strong>{{ livePrice.ticker }}</strong></td>
+        </tr>
+        <tr>
+          <th>Ask</th>
           <td :class="colorClass('ask')">${{ livePrice.ask.toFixed(2) }}</td>
+        </tr>
+        <tr>
+          <th>Bid</th>
           <td :class="colorClass('bid')">${{ livePrice.bid.toFixed(2) }}</td>
+        </tr>
+        <tr>
+          <th>Spread</th>
           <td><strong>${{ spread.toFixed(2) }}</strong></td>
+        </tr>
+        <tr>
+          <th>Updated</th>
           <td><n-tag type="info">{{ formattedTime }}</n-tag></td>
+        </tr>
+        <tr>
+          <th>Entry</th>
           <td>
             <n-select
               v-model:value="entryType"
@@ -42,7 +48,7 @@
       </tbody>
       <tbody v-else>
         <tr>
-          <td colspan="6" style="text-align: center;">
+          <td colspan="2" style="text-align: center;">
             ⏳ Waiting for price update...
           </td>
         </tr>
@@ -72,7 +78,7 @@ export default {
     NTable,
     NSelect
   },
-  setup() {
+  setup(props, { emit }) {
     const ticker = ref('')
     const currentTicker = ref<string | null>(null)
     const entryType = ref('')
@@ -93,6 +99,7 @@ export default {
     const submitTicker = () => {
       if (!ticker.value) return
       socket.emit('select_ticker', ticker.value)
+      emit('symbol-selected', ticker.value)
     }
 
     const colorClass = (type: 'ask' | 'bid') => {
@@ -120,13 +127,20 @@ export default {
       setTimeout(() => { flashClass.value = '' }, 300)
     })
 
-    // 🔁 Emit entry type to backend when changed
-    watch(entryType, (newValue) => {
-      if (currentTicker.value && newValue !== 'None') {
-        const mapped = newValue === '10 Sec PB' ? '10s' :
-                       newValue === '1 Min PB' ? '1m' :
-                       newValue === '5 Min PB' ? '5m' : ''
-        if (mapped) {
+    // 🔁 Emit entry type to backend when changed (only if not initial load)
+    let initialEntryTypeSet = false
+    watch(entryType, (newValue, oldValue) => {
+      if (!initialEntryTypeSet) {
+        initialEntryTypeSet = true
+        return
+      }
+      if (currentTicker.value) {
+        let mapped = ''
+        if (newValue === '10 Sec PB') mapped = '10s'
+        else if (newValue === '1 Min PB') mapped = '1m'
+        else if (newValue === '5 Min PB') mapped = '5m'
+        else if (newValue === 'None') mapped = 'none'
+        if (mapped !== '') {
           socket.emit('set_entry_type', {
             symbol: currentTicker.value,
             entry_type: mapped
@@ -141,14 +155,21 @@ export default {
 
       socket.on('connect', () => {
         console.log('✅ Connected to socket server')
+        // Request the current selected ticker from backend
+        socket.emit('get_selected_ticker')
       })
 
       socket.on('ticker_selected', (data: any) => {
         console.log('🎯 Ticker selected:', data)
-        currentTicker.value = data.ticker
-        previous.value = null
-        livePrice.value = null
-        entryType.value = 'None'
+        if (data.ticker) {
+          currentTicker.value = data.ticker
+          previous.value = null
+          livePrice.value = null
+          // Don't reset entryType here; let backend send entry_type_set if needed
+        } else {
+          currentTicker.value = null
+          entryType.value = 'None'
+        }
       })
 
       socket.on('price_update', (data: any) => {
@@ -157,6 +178,18 @@ export default {
             ? { ask: livePrice.value.ask, bid: livePrice.value.bid }
             : { ask: data.ask, bid: data.bid }
           livePrice.value = data
+        }
+      })
+
+      // Listen for backend-driven entry type changes
+      socket.on('entry_type_set', (data: any) => {
+        if (data.symbol === currentTicker.value) {
+          // Map backend value to dropdown label
+          let label = 'None'
+          if (data.entry_type === '10s') label = '10 Sec PB'
+          else if (data.entry_type === '1m') label = '1 Min PB'
+          else if (data.entry_type === '5m') label = '5 Min PB'
+          entryType.value = label
         }
       })
     })
@@ -180,34 +213,39 @@ export default {
 <style scoped>
 .momo-card {
   max-width: 500px;
-  margin: 2rem auto;
+  /* margin: 2rem auto; */
+  margin: 0 auto;
 }
-
 .mt-2 {
   margin-top: 0.5rem;
 }
-
 .mt-3 {
   margin-top: 1rem;
 }
-
-.quote-table {
+.quote-table-vertical {
   margin-top: 1rem;
   background-color: #fafafa;
+  width: 100%;
 }
-
+.quote-table-vertical th {
+  text-align: left;
+  width: 40%;
+  font-weight: 600;
+  background: #f5f5f5;
+}
+.quote-table-vertical td {
+  text-align: left;
+  width: 60%;
+}
 .price-up {
   background-color: #d6f5d6;
 }
-
 .price-down {
   background-color: #fbdcdc;
 }
-
 .flash {
   animation: flashFade 0.3s;
 }
-
 @keyframes flashFade {
   0% { background-color: #fffae6; }
   100% { background-color: transparent; }

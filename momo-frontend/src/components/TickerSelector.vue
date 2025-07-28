@@ -8,9 +8,7 @@
     />
     <n-button type="primary" class="mt-2" @click="submitTicker">Send</n-button>
 
-    <n-alert v-if="currentTicker" type="success" class="mt-3">
-      Selected: <strong>{{ currentTicker }}</strong>
-    </n-alert>
+    <!-- Removed Selected: ... alert -->
 
     <n-table bordered single-line size="small" class="quote-table-vertical">
       <tbody v-if="livePrice">
@@ -60,7 +58,7 @@
 </template>
 
 <script lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, toRefs } from 'vue'
 import { io, Socket } from 'socket.io-client'
 import {
   NCard, NInput, NButton, NTag, NAlert, NTable, NSelect
@@ -78,7 +76,7 @@ export default {
     NTable,
     NSelect
   },
-  setup(_props, { emit }) {
+  setup(props, { emit }) {
     const ticker = ref('')
     const currentTicker = ref<string | null>(null)
     const entryType = ref('')
@@ -95,31 +93,6 @@ export default {
 
     const previous = ref<{ ask: number; bid: number } | null>(null)
     const flashClass = ref('')
-
-    const submitTicker = () => {
-      if (!ticker.value) return
-      socket.emit('select_ticker', ticker.value)
-      emit('symbol-selected', ticker.value)
-    }
-
-    const colorClass = (type: 'ask' | 'bid') => {
-      if (!previous.value || !livePrice.value) return ''
-      const prev = previous.value[type]
-      const now = livePrice.value[type]
-      return now > prev ? 'price-up' : now < prev ? 'price-down' : ''
-    }
-
-    const formattedTime = computed(() => {
-      if (!livePrice.value?.timestamp) return ''
-      return new Date(livePrice.value.timestamp).toLocaleTimeString('en-US', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit'
-      })
-    })
-
-    const spread = computed(() => {
-      if (!livePrice.value) return 0
-      return livePrice.value.ask - livePrice.value.bid
-    })
 
     // 🔁 Flash on price update
     watch(livePrice, () => {
@@ -194,6 +167,31 @@ export default {
       })
     })
 
+    const submitTicker = () => {
+      if (!ticker.value) return
+      socket.emit('select_ticker', ticker.value)
+      emit('symbol-selected', ticker.value)
+    }
+
+    const colorClass = (type: 'ask' | 'bid') => {
+      if (!previous.value || !livePrice.value) return ''
+      const prev = previous.value[type]
+      const now = livePrice.value[type]
+      return now > prev ? 'price-up' : now < prev ? 'price-down' : ''
+    }
+
+    const formattedTime = computed(() => {
+      if (!livePrice.value?.timestamp) return ''
+      return new Date(livePrice.value.timestamp).toLocaleTimeString('en-US', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      })
+    })
+
+    const spread = computed(() => {
+      if (!livePrice.value) return 0
+      return livePrice.value.ask - livePrice.value.bid
+    })
+
     return {
       ticker,
       submitTicker,
@@ -204,7 +202,7 @@ export default {
       formattedTime,
       flashClass,
       entryType,
-      entryTypes
+      entryTypes,
     }
   }
 }

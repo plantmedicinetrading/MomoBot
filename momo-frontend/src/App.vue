@@ -133,6 +133,12 @@ onMounted(() => {
     breakoutLevels.value = levels;
   });
 
+  socket.on('breakout_levels', (data: any) => {
+    if (data.symbol === symbol.value) {
+      breakoutLevels.value = data.levels;
+    }
+  });
+
   socket.on('trade_marker', (marker: any) => {
     tradeMarkers.value.push(marker);
   });

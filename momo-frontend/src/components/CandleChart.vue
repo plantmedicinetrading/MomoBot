@@ -50,7 +50,7 @@ import { io, Socket } from 'socket.io-client';
 const props = defineProps<{
   symbol: string,
   timeframe: '10s' | '1m' | '5m',
-  breakoutLevels: number[], // e.g. [breakout1, breakout2]
+  breakoutLevels: (number|null)[], // [10s, 1m, 5m] levels
   tradeMarkers: Array<{ time: number, price: number, type: 'entry' | 'tp1' | 'tp2' | 'sl' }>,
   candles: Array<{
     time: number, // UNIX timestamp (seconds)
@@ -79,19 +79,34 @@ let lastCandle: any = null;
 let updateInterval: number | null = null;
 
 function drawBreakoutLines() {
+  // Remove all existing breakout lines
   breakoutLines.forEach(line => candleSeries?.removePriceLine(line));
   breakoutLines = [];
+  
   if (!candleSeries) return;
-  props.breakoutLevels.forEach(level => {
-    const line = candleSeries!.createPriceLine({
-      price: level,
-      color: 'orange',
-      lineWidth: 2,
-      lineStyle: 2,
-      axisLabelVisible: true,
-      title: 'Breakout'
-    });
-    breakoutLines.push(line);
+  
+  // Define colors for each timeframe
+  const timeframeColors = {
+    '10s': '#FF6B6B', // Red
+    '1m': '#4ECDC4',  // Teal
+    '5m': '#45B7D1'   // Blue
+  };
+  
+  // Draw breakout lines for each timeframe
+  const timeframes = ['10s', '1m', '5m'] as const;
+  timeframes.forEach((tf, index) => {
+    const level = props.breakoutLevels[index];
+    if (level !== null && level !== undefined) {
+      const line = candleSeries!.createPriceLine({
+        price: level,
+        color: timeframeColors[tf],
+        lineWidth: 2,
+        lineStyle: 2, // Dashed
+        axisLabelVisible: true,
+        title: `${tf} Breakout`
+      });
+      breakoutLines.push(line);
+    }
   });
 }
 

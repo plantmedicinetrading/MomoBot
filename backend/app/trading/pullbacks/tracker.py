@@ -94,7 +94,7 @@ class PullbackTracker:
 
         # Step 2: Check for lower highs even when not in a pullback (close >= previous close)
         elif latest["high"] < prev["high"]:
-            # Lower high detected - this could be the start of a pullback
+            # Lower high detected - this should always update the breakout level
             if not self.pullback_active:
                 # Start new pullback sequence
                 self.last_breakout_level = latest["high"]
@@ -103,13 +103,10 @@ class PullbackTracker:
                 logger.info(f"🔍 New pullback started on {self.symbol} ({self.interval}) — breakout level set to {self.last_breakout_level} (lower high)")
                 self.emit_breakout_levels()
             else:
-                # Already in a pullback, check for even lower high
-                if latest["high"] < self.last_breakout_level:
-                    self.last_breakout_level = latest["high"]
-                    logger.info(f"🔽 Lower high detected ({self.interval}) — adjusting breakout level for {self.symbol} to {self.last_breakout_level}")
-                    self.emit_breakout_levels()
-                else:
-                    logger.debug(f"📈 {self.symbol} ({self.interval}) — high {latest['high']} >= breakout level {self.last_breakout_level}")
+                # Already in a pullback, update to this lower high
+                self.last_breakout_level = latest["high"]
+                logger.info(f"🔽 Lower high detected ({self.interval}) — adjusting breakout level for {self.symbol} to {self.last_breakout_level}")
+                self.emit_breakout_levels()
 
         # Step 3: Check for continuation of existing pullback (even if not a new pullback candle)
         elif self.pullback_active and not self.breakout_triggered:

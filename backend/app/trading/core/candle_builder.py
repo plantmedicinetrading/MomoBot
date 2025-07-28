@@ -120,6 +120,23 @@ def handle_new_quote_10s(symbol: str, quote: Any):
             # Process breakout for 10s
             from ..core.breakout_logic import process_quote_for_breakout_10s
             process_quote_for_breakout_10s(symbol, state['candles_10s'][-1])
+            # --- FIX: Add finalized 10s candle to the 10s tracker ---
+            from ..pullbacks.tracker import PullbackTracker, Candle
+            if "pullback_tracker_10s" not in state:
+                logger.info(f"[10s] Creating new PullbackTracker for {symbol}")
+                state["pullback_tracker_10s"] = PullbackTracker(symbol, interval="10s")
+            tracker = state["pullback_tracker_10s"]
+            candle_obj = Candle(
+                timestamp=state['current_candle_10s']["timestamp"],
+                open=state['current_candle_10s']["open"],
+                high=state['current_candle_10s']["high"],
+                low=state['current_candle_10s']["low"],
+                close=state['current_candle_10s']["close"],
+                volume=state['current_candle_10s']["volume"]
+            )
+            tracker.add_candle(candle_obj)
+            logger.info(f"[10s] Added finalized candle to tracker for {symbol} at {state['current_candle_10s']['timestamp']}")
+            # --- END FIX ---
             emit_candle(symbol, '10s', state['current_candle_10s'])
         state['current_candle_10s'] = {
             'timestamp': bucket_ts,
@@ -172,6 +189,23 @@ def handle_new_quote_5m(symbol: str, quote: Any):
             # Process breakout for 5m
             from ..core.breakout_logic import process_quote_for_breakout_5m
             process_quote_for_breakout_5m(symbol, state['candles_5m'][-1])
+            # --- FIX: Add finalized 5m candle to the 5m tracker ---
+            from ..pullbacks.tracker import PullbackTracker, Candle
+            if "pullback_tracker_5m" not in state:
+                logger.info(f"[5m] Creating new PullbackTracker for {symbol}")
+                state["pullback_tracker_5m"] = PullbackTracker(symbol, interval="5m")
+            tracker = state["pullback_tracker_5m"]
+            candle_obj = Candle(
+                timestamp=state['current_candle_5m']["timestamp"],
+                open=state['current_candle_5m']["open"],
+                high=state['current_candle_5m']["high"],
+                low=state['current_candle_5m']["low"],
+                close=state['current_candle_5m']["close"],
+                volume=state['current_candle_5m']["volume"]
+            )
+            tracker.add_candle(candle_obj)
+            logger.info(f"[5m] Added finalized candle to tracker for {symbol} at {state['current_candle_5m']['timestamp']}")
+            # --- END FIX ---
             emit_candle(symbol, '5m', state['current_candle_5m'])
         # Start new candle
         state['current_candle_5m'] = {

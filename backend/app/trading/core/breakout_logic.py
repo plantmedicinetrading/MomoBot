@@ -24,7 +24,6 @@ def process_quote_for_breakout(symbol, quote):
     if shared_state.watched_ticker is None:
         logger.warning(f"[BREAKOUT] watched_ticker is None! No breakout logic will run.")
     if symbol != shared_state.watched_ticker:
-        logger.info(f"[BREAKOUT] Skipping: symbol {symbol} != watched_ticker {shared_state.watched_ticker}")
         return
     state = shared_state.ticker_states.get(symbol)
     if not state:

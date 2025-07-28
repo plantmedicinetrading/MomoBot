@@ -18,6 +18,7 @@
             :candles="candles"
             :breakoutLevels="breakoutLevels"
             :tradeMarkers="tradeMarkers"
+            @timeframe-changed="onTimeframeChanged"
           />
         </div>
       </div>
@@ -26,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { io } from 'socket.io-client';
 import CandleChart from './components/CandleChart.vue';
 import TickerSelector from './components/TickerSelector.vue';
@@ -35,7 +36,7 @@ import { NMessageProvider } from 'naive-ui';
 import axios from 'axios';
 
 const symbol = ref('');
-const timeframe = ref<any>('none');
+const timeframe = ref<'10s' | '1m' | '5m'>('10s');
 const candles = ref<any[]>([]);
 const breakoutLevels = ref<number[]>([]);
 const tradeMarkers = ref<any[]>([]);
@@ -52,11 +53,17 @@ function subscribe() {
 
 function onSymbolSelected(newSymbol: string) {
   symbol.value = newSymbol;
-  timeframe.value = 'none';
+  timeframe.value = '10s'; // Default to 10s chart when selecting a new ticker
   if (socket && newSymbol) {
     socket.emit('select_ticker', newSymbol);
     socket.emit('set_entry_type', { symbol: newSymbol, entry_type: 'none' });
   }
+}
+
+function onTimeframeChanged(newTimeframe: '10s' | '1m' | '5m') {
+  timeframe.value = newTimeframe;
+  // Don't change the active_entry_type when switching chart timeframes
+  // The chart timeframe is just for display purposes
 }
 
 async function fetchPnLData() {
@@ -109,13 +116,16 @@ onMounted(() => {
 
   fetchPnLData();
 
-  socket.on('candle', (data: any) => {
-    const idx = candles.value.findIndex(c => c.time === data.time);
-    if (idx !== -1) {
-      candles.value[idx] = data;
-    } else {
-      candles.value.push(data);
-      if (candles.value.length > 500) candles.value.shift();
+  socket.on('candle_update', (data: any) => {
+    // Only handle single candle updates, not bulk updates
+    if (!data.candles || !Array.isArray(data.candles)) {
+      const idx = candles.value.findIndex(c => c.time === data.time);
+      if (idx !== -1) {
+        candles.value[idx] = data;
+      } else {
+        candles.value.push(data);
+        if (candles.value.length > 500) candles.value.shift();
+      }
     }
   });
 
@@ -129,7 +139,7 @@ onMounted(() => {
 
   // Optionally, listen for trade close events to refresh PnL
   socket.on('trade_closed', () => {
-    timeframe.value = 'none';
+    timeframe.value = '10s'; // Reset to 10s when trade closes
     if (symbol.value && socket) {
       socket.emit('set_entry_type', { symbol: symbol.value, entry_type: 'none' });
     }

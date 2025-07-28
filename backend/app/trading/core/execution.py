@@ -1,6 +1,7 @@
 # app/trading/core/execution.py
 
 import logging
+from datetime import datetime
 from ...shared_state import ticker_states
 from ...db import insert_trade, insert_execution
 
@@ -17,7 +18,8 @@ def submit_bracket_order(symbol: str, entry: float, qty: int, tp1: float, tp2: f
         "tp1_hit": False,
         "tp2_hit": False,
         "sl_hit": False,
-        "order_id": None
+        "order_id": None,
+        "entry_timestamp": datetime.utcnow()  # Track when trade was taken for wash trade protection
     }
     # Optionally record to DB
     insert_execution({

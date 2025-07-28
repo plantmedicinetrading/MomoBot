@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import PositionsTable from './components/PositionsTable.vue'
-import TickerSelector from './components/TickerSelector.vue'
+
 import TradeHistory from './components/TradeHistory.vue'
 
 const routes = [

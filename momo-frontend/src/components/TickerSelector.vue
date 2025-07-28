@@ -78,7 +78,7 @@ export default {
     NTable,
     NSelect
   },
-  setup(props, { emit }) {
+  setup(_props, { emit }) {
     const ticker = ref('')
     const currentTicker = ref<string | null>(null)
     const entryType = ref('')
@@ -129,7 +129,7 @@ export default {
 
     // 🔁 Emit entry type to backend when changed (only if not initial load)
     let initialEntryTypeSet = false
-    watch(entryType, (newValue, oldValue) => {
+    watch(entryType, (newValue) => {
       if (!initialEntryTypeSet) {
         initialEntryTypeSet = true
         return

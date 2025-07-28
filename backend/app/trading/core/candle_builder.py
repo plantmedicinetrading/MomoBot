@@ -192,10 +192,8 @@ def handle_new_quote_5m(symbol: str, quote: Any):
 
 
 def emit_candle(symbol, timeframe, candle):
-    from ... import socketio
+    from ...socketio_events import emit_candle_update
     data = {
-        'symbol': symbol,
-        'timeframe': timeframe,
         'time': int(candle['timestamp'].timestamp()),
         'open': candle['open'],
         'high': candle['high'],
@@ -203,4 +201,4 @@ def emit_candle(symbol, timeframe, candle):
         'close': candle['close'],
         'volume': candle.get('volume', 0)
     }
-    socketio.emit('candle', data)
+    emit_candle_update(symbol, timeframe, data)

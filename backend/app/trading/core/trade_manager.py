@@ -1,6 +1,7 @@
 # app/trading/core/trade_manager.py
 
 import logging
+from datetime import datetime
 
 from ...state import active_trades
 from ...shared_state import ticker_states
@@ -57,7 +58,8 @@ def handle_breakout_trigger(symbol: str, entry_price: float, entry_type: str, bi
         "tp1_order_id": None,
         "tp2_order_id": None,
         "sl_order_id": None,
-        "half_closed": False
+        "half_closed": False,
+        "entry_timestamp": datetime.utcnow()  # Track when trade was taken for wash trade protection
     }
 
     # Optionally disable further breakout triggers for this entry type

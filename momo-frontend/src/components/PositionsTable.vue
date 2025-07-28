@@ -9,8 +9,6 @@
               <th>Ticker</th>
               <th>Shares</th>
               <th>Current Price</th>
-              <th>Bid</th>
-              <th>Ask</th>
               <th>Entry Price</th>
               <th>Unrealized P/L</th>
               <th>Diff/Share</th>
@@ -26,14 +24,6 @@
               <td>{{ pos.size ?? '-' }}</td>
               <td>
                 <span v-if="pos.last_price !== undefined">${{ Number(pos.last_price).toFixed(2) }}</span>
-                <span v-else>-</span>
-              </td>
-              <td>
-                <span v-if="pos.bid !== undefined">${{ Number(pos.bid).toFixed(2) }}</span>
-                <span v-else>-</span>
-              </td>
-              <td>
-                <span v-if="pos.ask !== undefined">${{ Number(pos.ask).toFixed(2) }}</span>
                 <span v-else>-</span>
               </td>
               <td>
@@ -53,15 +43,33 @@
                 <span v-else>-</span>
               </td>
               <td>
-                <span v-if="pos.stop !== undefined">${{ Number(pos.stop).toFixed(2) }}</span>
+                <div v-if="pos.stop !== undefined && pos.last_price !== undefined" class="level-indicator">
+                  <span class="level-price">${{ Number(pos.stop).toFixed(2) }}</span>
+                  <span :class="levelDiffClass(pos.stop, pos.last_price)" class="level-diff">
+                    {{ getLevelDiff(pos.stop, pos.last_price) }}
+                  </span>
+                </div>
+                <span v-else-if="pos.stop !== undefined">${{ Number(pos.stop).toFixed(2) }}</span>
                 <span v-else>-</span>
               </td>
               <td>
-                <span v-if="pos.tp1 !== undefined">${{ Number(pos.tp1).toFixed(2) }}</span>
+                <div v-if="pos.tp1 !== undefined && pos.last_price !== undefined" class="level-indicator">
+                  <span class="level-price">${{ Number(pos.tp1).toFixed(2) }}</span>
+                  <span :class="levelDiffClass(pos.tp1, pos.last_price)" class="level-diff">
+                    {{ getLevelDiff(pos.tp1, pos.last_price) }}
+                  </span>
+                </div>
+                <span v-else-if="pos.tp1 !== undefined">${{ Number(pos.tp1).toFixed(2) }}</span>
                 <span v-else>-</span>
               </td>
               <td>
-                <span v-if="pos.tp2 !== undefined">${{ Number(pos.tp2).toFixed(2) }}</span>
+                <div v-if="pos.tp2 !== undefined && pos.last_price !== undefined" class="level-indicator">
+                  <span class="level-price">${{ Number(pos.tp2).toFixed(2) }}</span>
+                  <span :class="levelDiffClass(pos.tp2, pos.last_price)" class="level-diff">
+                    {{ getLevelDiff(pos.tp2, pos.last_price) }}
+                  </span>
+                </div>
+                <span v-else-if="pos.tp2 !== undefined">${{ Number(pos.tp2).toFixed(2) }}</span>
                 <span v-else>-</span>
               </td>
               <td>
@@ -83,33 +91,19 @@
 <script lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { NCard, NTable, NButton, useMessage } from 'naive-ui'
+import { io, Socket } from 'socket.io-client'
 import TodayPnLTable from './TodayPnLTable.vue'
 
 interface Position {
   symbol: string
   size?: number
   entry_price?: number
-  ask?: number
-  bid?: number
   last_price?: number
   tp1?: number
   tp2?: number
   stop?: number
   unrealized?: number
   diff_per_share?: number
-}
-
-interface Trade {
-  id: string
-  symbol: string
-  shares: number
-  entry_price: number
-  exit_price: number
-  entry_time: string
-  exit_time: string
-  entry_type?: string
-  pl: number
-  profit_loss: number
 }
 
 export default {
@@ -119,6 +113,7 @@ export default {
     const positions = ref<Position[]>([])
     const message = useMessage()
     const tradeHistory = ref<any[]>([])
+    let socket: Socket | null = null
 
     // Fetch open positions from backend
     const fetchPositions = async () => {
@@ -146,32 +141,56 @@ export default {
       }
     }
 
-    // Listen for price_update events to update ask in real time
+    // Setup socket connection for real-time updates
+    const setupSocketConnection = () => {
+      socket = io('http://localhost:5050')
+      
+      socket.on('connect', () => {
+        console.log('✅ PositionsTable connected to socket server')
+      })
+
+      // Listen for price updates to update current price in real-time
+      socket.on('price_update', (data: any) => {
+        const idx = positions.value.findIndex(p => p.symbol === data.ticker)
+        if (idx !== -1) {
+          // Update the current price with the mid price from bid/ask
+          const midPrice = (data.ask + data.bid) / 2
+          positions.value[idx].last_price = midPrice
+          
+          // Recalculate unrealized P/L and diff per share
+          const position = positions.value[idx]
+          if (position.size && position.entry_price) {
+            const diffPerShare = midPrice - position.entry_price
+            position.diff_per_share = diffPerShare
+            position.unrealized = diffPerShare * position.size
+          }
+        }
+      })
+    }
+
+    // Calculate difference from a level to current price
+    const getLevelDiff = (level: number, currentPrice: number) => {
+      const diff = currentPrice - level
+      const sign = diff >= 0 ? '+' : ''
+      return `${sign}$${diff.toFixed(2)}`
+    }
+
+    // Get CSS class for level difference
+    const levelDiffClass = (level: number, currentPrice: number) => {
+      const diff = currentPrice - level
+      if (Math.abs(diff) < 0.01) return 'level-at-target' // Within 1 cent
+      return diff > 0 ? 'level-above' : 'level-below'
+    }
+
     onMounted(() => {
       fetchPositions()
       fetchTradeHistory()
+      setupSocketConnection()
+      
+      // Poll for position updates every 5 seconds as backup
       setInterval(fetchPositions, 5000)
       setInterval(fetchTradeHistory, 60000)
-      // SocketIO price update
-      if ((window as any).socket) {
-        (window as any).socket.on('price_update', (data: any) => {
-          const idx = positions.value.findIndex(p => p.symbol === data.ticker)
-          if (idx !== -1) {
-            positions.value[idx].ask = data.ask
-          }
-        })
-      }
     })
-
-    function getEasternDayBounds(date = new Date()) {
-      // Get the current date in ET
-      const options = { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' };
-      const etDateString = date.toLocaleDateString('en-US', options as Intl.DateTimeFormatOptions);
-      const [month, day, year] = etDateString.split('/');
-      const start = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00-05:00`);
-      const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-      return [start.getTime(), end.getTime()];
-    }
 
     const todayPnLSummary = computed(() => {
       const now = new Date();
@@ -249,7 +268,9 @@ export default {
       todayPnLSummary,
       plClass,
       diffClass,
-      closePosition
+      closePosition,
+      getLevelDiff,
+      levelDiffClass
     }
   }
 }
@@ -294,5 +315,66 @@ export default {
 .pl-down {
   color: #e74c3c;
   font-weight: bold;
+}
+
+/* Level indicator styles */
+.level-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.level-price {
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
+.level-diff {
+  font-size: 0.8em;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-align: center;
+  min-width: 60px;
+  display: inline-block;
+}
+
+.level-above {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.level-below {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.level-at-target {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+  font-weight: bold;
+}
+
+/* Hover effects for better UX */
+.level-indicator:hover .level-diff {
+  transform: scale(1.05);
+  transition: transform 0.1s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .level-indicator {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+  }
+  
+  .level-diff {
+    min-width: 50px;
+    font-size: 0.75em;
+  }
 }
 </style> 

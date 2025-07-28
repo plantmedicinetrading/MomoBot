@@ -21,11 +21,15 @@
       </tbody>
       <tfoot>
         <tr class="totals-row">
-          <td><strong>Totals</strong></td>
-          <td></td>
-          <td><strong>{{ totalShares }}</strong></td>
-          <td :class="plClass(totalRealised)"><strong>${{ totalRealised.toFixed(2) }}</strong></td>
-          <td :class="plClass(weightedAvgDiffPerShare)"><strong>${{ weightedAvgDiffPerShare.toFixed(2) }}</strong></td>
+          <td class="totals-label"><strong>Totals</strong></td>
+          <td class="totals-trades">{{ totalTrades }}</td>
+          <td class="totals-shares"><strong>{{ totalShares }}</strong></td>
+          <td :class="['totals-realised', plClass(totalRealised)]">
+            <strong>${{ totalRealised.toFixed(2) }}</strong>
+          </td>
+          <td :class="['totals-diff', plClass(weightedAvgDiffPerShare)]">
+            <strong>${{ weightedAvgDiffPerShare.toFixed(2) }}</strong>
+          </td>
         </tr>
       </tfoot>
     </n-table>
@@ -55,6 +59,7 @@ export default defineComponent({
     }
   },
   setup(props) {
+    const totalTrades = computed(() => props.data.reduce((sum, row) => sum + row.trades, 0))
     const totalShares = computed(() => props.data.reduce((sum, row) => sum + row.shares, 0))
     const totalRealised = computed(() => props.data.reduce((sum, row) => sum + row.realised, 0))
     const weightedAvgDiffPerShare = computed(() => {
@@ -66,6 +71,7 @@ export default defineComponent({
       return ''
     }
     return {
+      totalTrades,
       totalShares,
       totalRealised,
       weightedAvgDiffPerShare,
@@ -77,7 +83,7 @@ export default defineComponent({
 
 <style scoped>
 .pnl-card {
-  margin: 2rem auto 0 auto;
+  margin: 0 auto 0 auto;
   max-width: 900px;
 }
 .pnl-table {
@@ -92,12 +98,63 @@ export default defineComponent({
   color: #e74c3c;
   font-weight: bold;
 }
+
+/* Subtle totals styling */
 .totals-row {
-  background: #f5f5f5;
+  background: #f8f9fa;
+  border-top: 2px solid #e9ecef;
+  font-weight: 600;
 }
+
+.totals-label {
+  font-weight: 700;
+  color: #495057;
+  text-align: center;
+  background: #e9ecef;
+  border-right: 1px solid #dee2e6;
+}
+
+.totals-trades {
+  text-align: center;
+  background: #f8f9fa;
+}
+
+.totals-shares {
+  text-align: center;
+  background: #f8f9fa;
+}
+
+.totals-realised {
+  text-align: center;
+  font-size: 1.1em;
+  background: #f1f3f4;
+  border-left: 1px solid #dee2e6;
+}
+
+.totals-diff {
+  text-align: center;
+  font-size: 1.1em;
+  background: #f1f3f4;
+  border-left: 1px solid #dee2e6;
+}
+
+/* Subtle hover effect */
+.totals-row:hover {
+  background: #e9ecef;
+  transition: background-color 0.2s ease;
+}
+
+/* Responsive adjustments */
 @media (max-width: 900px) {
   .pnl-card {
     max-width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .totals-realised,
+  .totals-diff {
+    font-size: 1em;
   }
 }
 </style> 

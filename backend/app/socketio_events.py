@@ -35,6 +35,16 @@ def emit_price_update(symbol, ask, bid, ask_size, bid_size, timestamp):
     from . import socketio
     socketio.emit('price_update', data)
 
+def emit_candle_update(symbol, timeframe, candle_data):
+    """Emit candle update to all connected clients"""
+    from . import socketio
+    data = {
+        "symbol": symbol.upper(),
+        "timeframe": timeframe,
+        **candle_data
+    }
+    socketio.emit("candle_update", data)
+
 def register_socket_events(socketio):
     @socketio.on('connect')
     def on_connect(auth=None):
@@ -111,6 +121,53 @@ def register_socket_events(socketio):
             socketio.emit("entry_type_set", {"symbol": symbol, "entry_type": ticker_states[symbol]["active_entry_type"] or "none"})
         else:
             print(f"⚠️ Invalid entry type or symbol: {entry_type}, {symbol}")
+
+    @socketio.on("request_candles")
+    def handle_request_candles(data):
+        symbol = data.get("symbol", "").upper()
+        timeframe = data.get("timeframe", "1m")
+        print(f"[SOCKETIO] Request for candles: {symbol} ({timeframe})")
+        
+        if symbol and symbol in ticker_states:
+            # Get candles for the requested timeframe
+            state = ticker_states[symbol]
+            print(f"[SOCKETIO] Available keys in state: {list(state.keys())}")
+            
+            # Get the appropriate candle list based on timeframe
+            if timeframe == "10s":
+                candles = state.get("candles_10s", [])
+                print(f"[SOCKETIO] Found {len(candles)} 10s candles")
+            elif timeframe == "1m":
+                candles = state.get("candles", [])
+                print(f"[SOCKETIO] Found {len(candles)} 1m candles")
+            elif timeframe == "5m":
+                candles = state.get("candles_5m", [])
+                print(f"[SOCKETIO] Found {len(candles)} 5m candles")
+            else:
+                candles = []
+                print(f"[SOCKETIO] Unknown timeframe: {timeframe}")
+            
+            # Convert datetime objects to timestamps for JSON serialization
+            serialized_candles = []
+            for candle in candles:
+                serialized_candle = {
+                    "time": int(candle["timestamp"].timestamp()) if hasattr(candle["timestamp"], "timestamp") else candle["timestamp"],
+                    "open": candle["open"],
+                    "high": candle["high"],
+                    "low": candle["low"],
+                    "close": candle["close"],
+                    "volume": candle.get("volume", 0)
+                }
+                serialized_candles.append(serialized_candle)
+            
+            socketio.emit("candle_update", {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "candles": serialized_candles
+            })
+            print(f"[SOCKETIO] Sent {len(serialized_candles)} candles for {symbol} ({timeframe})")
+        else:
+            print(f"⚠️ No candles available for {symbol}")
 
     # ✅ Allow AlpacaStream to emit updates to frontend
     try:

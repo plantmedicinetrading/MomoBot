@@ -1,5 +1,5 @@
 <template>
-  <n-card :title="`Live Chart${props.symbol ? ' — ' + props.symbol : ''}`" style="height: 100%;">
+  <n-card style="height: 100%;">
     <div class="chart-controls">
       <n-button-group>
         <n-button 
@@ -33,6 +33,9 @@
         Go to Realtime
       </n-button>
     </div>
+    <div class="chart-header" v-if="props.symbol">
+      <h3 class="ticker-name">{{ props.symbol }}</h3>
+    </div>
     <div ref="chartContainer" style="height: 500px; width: 100%; position: relative;">
       <!-- Tooltip element -->
       <div ref="tooltip" class="chart-tooltip"></div>
@@ -46,6 +49,7 @@ import { createChart } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { NCard, NButton, NButtonGroup } from 'naive-ui';
 import { io, Socket } from 'socket.io-client';
+import { formatChartTime } from '../utils/timezone';
 
 const props = defineProps<{
   symbol: string,
@@ -180,18 +184,7 @@ function setupTooltip() {
       const data = candleSeries ? param.seriesData.get(candleSeries) : null;
       if (data && tooltip.value && 'close' in data && 'open' in data && 'high' in data && 'low' in data) {
         const candleData = data as { open: number; high: number; low: number; close: number; volume?: number };
-        const date = new Date((param.time as number) * 1000);
-        const timeStr = date.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false
-        });
-        const dateStr = date.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric'
-        });
+        const { dateStr, timeStr } = formatChartTime(param.time as number);
         
         const isUp = candleData.close >= candleData.open;
         const color = isUp ? '#26a69a' : '#ef5350';
@@ -511,6 +504,24 @@ window.addEventListener('resize', () => {
   padding: 0.5rem;
   background-color: #f8f9fa;
   border-radius: 4px;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 8px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.ticker-name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .chart-tooltip {

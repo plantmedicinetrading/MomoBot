@@ -63,6 +63,7 @@ import { io, Socket } from 'socket.io-client'
 import {
   NCard, NInput, NButton, NTag, NAlert, NTable, NSelect
 } from 'naive-ui'
+import { formatEasternTime } from '../utils/timezone'
 
 let socket: Socket
 
@@ -182,9 +183,7 @@ export default {
 
     const formattedTime = computed(() => {
       if (!livePrice.value?.timestamp) return ''
-      return new Date(livePrice.value.timestamp).toLocaleTimeString('en-US', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit'
-      })
+      return formatEasternTime(livePrice.value.timestamp)
     })
 
     const spread = computed(() => {

@@ -6,6 +6,7 @@ from datetime import datetime
 from ...state import active_trades
 from ...shared_state import ticker_states
 from ..core.execution import submit_bracket_order, submit_order, submit_stop_limit_order
+from ...utils.timezone_utils import get_eastern_time
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ def handle_breakout_trigger(symbol: str, entry_price: float, entry_type: str, bi
         "tp2_order_id": None,
         "sl_order_id": None,
         "half_closed": False,
-        "entry_timestamp": datetime.utcnow()  # Track when trade was taken for wash trade protection
+        "entry_timestamp": get_eastern_time()  # Track when trade was taken for wash trade protection
     }
 
     # Optionally disable further breakout triggers for this entry type

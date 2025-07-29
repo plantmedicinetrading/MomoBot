@@ -6,9 +6,11 @@ from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
 from flask_socketio import SocketIO
+from datetime import datetime
 
 from .state import config
 from .trading.stream.polygon_stream import PolygonStream
+from .utils.timezone_utils import get_eastern_time
 
 load_dotenv()
 
@@ -17,11 +19,35 @@ socketio = SocketIO(cors_allowed_origins="*")
 polygon_stream = PolygonStream()
 # Do not set socketio or subscribe to any ticker until select_ticker is received
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] %(levelname)s in %(name)s: %(message)s'
+class EasternTimeFormatter(logging.Formatter):
+    """Custom formatter that uses Eastern Time for timestamps"""
+    
+    def formatTime(self, record, datefmt=None):
+        # Convert to Eastern Time for logging
+        eastern_time = get_eastern_time()
+        if datefmt:
+            return eastern_time.strftime(datefmt)
+        else:
+            return eastern_time.strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]
+
+# Set up logging with Eastern Time formatter
+formatter = EasternTimeFormatter(
+    fmt='[%(asctime)s] %(levelname)s in %(name)s: %(message)s'
 )
+
+# Configure root logger
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+
+# Remove existing handlers to avoid duplicates
+for handler in root_logger.handlers[:]:
+    root_logger.removeHandler(handler)
+
+# Add handler with Eastern Time formatter
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+root_logger.addHandler(handler)
+
 # Explicitly set tracker logger to INFO
 logging.getLogger('backend.app.trading.pullbacks.tracker').setLevel(logging.INFO)
 

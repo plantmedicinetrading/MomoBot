@@ -46,6 +46,7 @@
 <script lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { NCard, NTable, NButton, NDatePicker, NSelect, useMessage } from 'naive-ui'
+import { formatEasternTime } from '../utils/timezone'
 
 interface Trade {
   id: string
@@ -60,8 +61,7 @@ interface Trade {
 }
 
 function toEasternTimeString(isoString: string) {
-  const date = new Date(isoString)
-  return date.toLocaleString('en-US', { timeZone: 'America/New_York' })
+  return formatEasternTime(isoString)
 }
 
 function toEasternMidnightTimestamp(date: Date) {
@@ -114,7 +114,7 @@ export default {
           // Convert picker values to ET day boundaries
           const startET = toEasternMidnightTimestamp(new Date(dateRange.value[0]))
           const endET = toEasternMidnightTimestamp(new Date(dateRange.value[1])) + 24 * 60 * 60 * 1000
-          const entryET = new Date(new Date(trade.entry_time).toLocaleString('en-US', { timeZone: 'America/New_York' })).getTime();
+          const entryET = new Date(trade.entry_time).getTime();
           dateOk = entryET >= startET && entryET < endET
         }
         // Entry type filter

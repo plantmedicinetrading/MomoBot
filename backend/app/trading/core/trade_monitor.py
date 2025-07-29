@@ -5,8 +5,11 @@ from ...shared_state import ticker_states
 from ..core.execution import submit_order, submit_stop_limit_order
 from ...db import insert_trade, insert_execution
 from datetime import datetime, timedelta
+from ...utils.timezone_utils import get_eastern_time, to_eastern_iso
 
 logger = logging.getLogger(__name__)
+
+
 
 def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
     #logger.info(f"Checking trade targets for {symbol} at {price}")
@@ -20,12 +23,21 @@ def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
 
     # Check if 5 seconds have elapsed since trade was taken
     if "entry_timestamp" not in trade:
-        # Initialize entry timestamp if not present (for backward compatibility)
-        trade["entry_timestamp"] = datetime.utcnow()
-        logger.info(f"[{symbol}] Initialized entry timestamp for wash trade protection")
+        # If no entry timestamp, this might be an old trade without wash trade protection
+        # Skip wash trade protection for backward compatibility
+        logger.info(f"[{symbol}] No entry timestamp found, skipping wash trade protection")
         return
     
-    time_since_entry = datetime.utcnow() - trade["entry_timestamp"]
+    # Ensure both datetimes are timezone-aware for comparison
+    current_time = get_eastern_time()
+    entry_timestamp = trade["entry_timestamp"]
+    
+    # If entry_timestamp is naive, assume it's Eastern Time
+    if entry_timestamp.tzinfo is None:
+        from ...utils.timezone_utils import EASTERN_TZ
+        entry_timestamp = EASTERN_TZ.localize(entry_timestamp)
+    
+    time_since_entry = current_time - entry_timestamp
     if time_since_entry.total_seconds() < 5:
         # Still within 5-second wash trade protection window
         remaining_time = 5 - time_since_entry.total_seconds()
@@ -45,7 +57,7 @@ def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
         trade["stop"] = round(trade["entry_price"], 2)  # ✅ Move stop to breakeven
         logger.info(f"✅ [{symbol}] TP1 hit at {ask}. Stop moved to breakeven.")
         # Record trade for first half
-        now = datetime.utcnow().isoformat()
+        now = to_eastern_iso()
         entry_time = trade.get("entry_time") or now
         entry_price = trade.get("entry_price")
         exit_price = ask if ask is not None else bid
@@ -94,7 +106,7 @@ def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
         trade["tp2_hit"] = True
         logger.info(f"🏁 [{symbol}] TP2 hit at {ask}. Trade closed.")
         # Record trade in DB for remaining shares
-        now = datetime.utcnow().isoformat()
+        now = to_eastern_iso()
         entry_time = trade.get("entry_time") or now
         entry_price = trade.get("entry_price")
         exit_price = ask if ask is not None else bid
@@ -147,7 +159,7 @@ def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
         trade["sl_hit"] = True
         logger.info(f"❌ [{symbol}] Stopped out at {price}. Trade closed.")
         # Record trade in DB for remaining shares
-        now = datetime.utcnow().isoformat()
+        now = to_eastern_iso()
         entry_time = trade.get("entry_time") or now
         entry_price = trade.get("entry_price")
         exit_price = ask if ask is not None else bid

@@ -24,6 +24,7 @@ def handle_new_quote(symbol: str, quote: Any):
             "last_quote": None
         }
     state = ticker_states[symbol]
+    # Keep timestamps in UTC for chart compatibility, but store Eastern Time for trade records
     ts = quote.timestamp.replace(second=0, microsecond=0)
     price = quote.ask_price if quote.ask_price else quote.bid_price
     volume = quote.ask_size + quote.bid_size
@@ -227,8 +228,16 @@ def handle_new_quote_5m(symbol: str, quote: Any):
 
 def emit_candle(symbol, timeframe, candle):
     from ...socketio_events import emit_candle_update
+    # Convert datetime to Unix timestamp for chart (timestamps are in UTC)
+    if hasattr(candle['timestamp'], 'timestamp'):
+        # If it's a datetime object, convert to Unix timestamp
+        unix_time = int(candle['timestamp'].timestamp())
+    else:
+        # If it's already a Unix timestamp, use as is
+        unix_time = int(candle['timestamp'])
+    
     data = {
-        'time': int(candle['timestamp'].timestamp()),
+        'time': unix_time,
         'open': candle['open'],
         'high': candle['high'],
         'low': candle['low'],

@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from ...shared_state import ticker_states
 from ...db import insert_trade, insert_execution
+from ...utils.hotkey_utils import trigger_hotkey
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +35,13 @@ def submit_bracket_order(symbol: str, entry: float, qty: int, tp1: float, tp2: f
     })
 
 def submit_order(symbol: str, qty: int, side: str, bid: float, ask: float):
+    # Send hotkey FIRST for buy orders (entry) - before any logging or recording
+    if side.lower() == "buy":
+        trigger_hotkey("buy_ask")
+    
     price = round(bid if side == "sell" else ask, 2)
     logger.info(f"[{symbol}] (SIM) {side.upper()} order: qty={qty} @ ${price}")
+    
     insert_execution({
         "symbol": symbol,
         "quantity": qty,
@@ -49,7 +55,11 @@ def submit_order(symbol: str, qty: int, side: str, bid: float, ask: float):
     return {"symbol": symbol, "qty": qty, "side": side, "price": price, "simulated": True}
 
 def submit_stop_limit_order(symbol: str, qty: int, stop_price: float, limit_price: float):
+    # Send hotkey FIRST for stop limit orders (stop loss) - before any logging or recording
+    trigger_hotkey("sell_all_bid")
+    
     logger.info(f"[{symbol}] (SIM) Stop-limit order: qty={qty}, stop={stop_price}, limit={limit_price}")
+    
     insert_execution({
         "symbol": symbol,
         "quantity": qty,

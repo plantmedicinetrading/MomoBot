@@ -6,6 +6,7 @@ from collections import defaultdict
 from .trading.core.execution import submit_order
 from .db import insert_trade, get_all_trades, insert_execution, get_all_executions
 from datetime import datetime
+from .utils.hotkey_utils import trigger_hotkey
 import csv
 from flask import Response
 from .trading.stream.polygon_stream import fetch_historical_aggregated_bars
@@ -132,6 +133,8 @@ def close_position():
         return jsonify({"error": "No quote or size info for symbol"}), 400
     bid = getattr(last_quote, "bid", None) or getattr(last_quote, "bid_price", None)
     ask = getattr(last_quote, "ask", None) or getattr(last_quote, "ask_price", None)
+    # Send hotkey FIRST for manual position close - before any logging or recording
+    trigger_hotkey("sell_all_bid")
     # Simulate sell order
     order = submit_order(symbol, size, "sell", bid, ask)
     # Record executions (Buy and Sell)

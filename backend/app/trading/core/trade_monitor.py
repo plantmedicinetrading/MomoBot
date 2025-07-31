@@ -6,6 +6,7 @@ from ..core.execution import submit_order, submit_stop_limit_order
 from ...db import insert_trade, insert_execution
 from datetime import datetime, timedelta
 from ...utils.timezone_utils import get_eastern_time, to_eastern_iso
+from ...utils.hotkey_utils import trigger_hotkey, trigger_hotkey_sequence
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,9 @@ def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
 
     # ✅ TP1 Hit
     if not trade["tp1_hit"] and ask is not None and ask >= trade["tp1"]:
+        # Send TP1 hotkey sequence FIRST: sell_ask, cancel_all, break_even - before any logging or recording
+        trigger_hotkey_sequence(["sell_ask", "cancel_all", "break_even"])
+        
         half = size // 2
         submit_order(symbol=symbol, qty=half, side="sell", bid=bid, ask=ask)
         trade["tp1_hit"] = True
@@ -100,6 +104,9 @@ def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
 
     # ✅ TP2 Hit
     elif trade["tp1_hit"] and not trade["tp2_hit"] and ask is not None and ask >= trade["tp2"]:
+        # Send TP2 hotkey FIRST: sell_ask - before any logging or recording
+        trigger_hotkey("sell_ask")
+        
         remaining = trade["size"]
         if remaining > 0:
             submit_order(symbol=symbol, qty=remaining, side="sell", bid=bid, ask=ask)
@@ -147,6 +154,9 @@ def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
 
     # ✅ Stop Hit (after SL or breakeven)
     elif price <= trade["stop"]:
+        # Send stop loss hotkey FIRST: sell_all_bid - before any logging or recording
+        trigger_hotkey("sell_all_bid")
+        
         remaining = trade["size"]
         if remaining > 0:
             submit_order(

@@ -4,3 +4,4 @@ python-dotenv
 eventlet
 flask-cors
 alpaca-py
+websockets

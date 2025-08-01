@@ -7,6 +7,7 @@ from ...db import insert_trade, insert_execution
 from datetime import datetime, timedelta
 from ...utils.timezone_utils import get_eastern_time, to_eastern_iso
 from ...utils.hotkey_utils import trigger_hotkey, trigger_hotkey_sequence
+from ...utils.voice_utils import announce_trade_exit
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,9 @@ def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
         trade["size"] -= half  # Update remaining size
         trade["stop"] = round(trade["entry_price"], 2)  # ✅ Move stop to breakeven
         logger.info(f"✅ [{symbol}] TP1 hit at {ask}. Stop moved to breakeven.")
+        
+        # Announce TP1 exit with robotic voice
+        announce_trade_exit(symbol, ask, "take profit one")
         # Record trade for first half
         now = to_eastern_iso()
         entry_time = trade.get("entry_time") or now
@@ -112,6 +116,9 @@ def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
             submit_order(symbol=symbol, qty=remaining, side="sell", bid=bid, ask=ask)
         trade["tp2_hit"] = True
         logger.info(f"🏁 [{symbol}] TP2 hit at {ask}. Trade closed.")
+        
+        # Announce TP2 exit with robotic voice
+        announce_trade_exit(symbol, ask, "take profit two")
         # Record trade in DB for remaining shares
         now = to_eastern_iso()
         entry_time = trade.get("entry_time") or now
@@ -168,6 +175,9 @@ def check_trade_targets(symbol: str, price: float, bid: float, ask: float):
             )
         trade["sl_hit"] = True
         logger.info(f"❌ [{symbol}] Stopped out at {price}. Trade closed.")
+        
+        # Announce stop loss exit with robotic voice
+        announce_trade_exit(symbol, price, "stop loss")
         # Record trade in DB for remaining shares
         now = to_eastern_iso()
         entry_time = trade.get("entry_time") or now

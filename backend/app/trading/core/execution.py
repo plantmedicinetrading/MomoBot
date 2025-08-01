@@ -5,11 +5,16 @@ from datetime import datetime
 from ...shared_state import ticker_states
 from ...db import insert_trade, insert_execution
 from ...utils.hotkey_utils import trigger_hotkey
+from ...utils.voice_utils import announce_new_trade
 
 logger = logging.getLogger(__name__)
 
 def submit_bracket_order(symbol: str, entry: float, qty: int, tp1: float, tp2: float, stop: float):
     logger.info(f"[{symbol}] (SIM) Bracket order: entry={entry}, qty={qty}, tp1={tp1}, tp2={tp2}, stop={stop}")
+    
+    # Announce new trade with robotic voice
+    announce_new_trade(symbol, entry)
+    
     ticker_states[symbol]["position"] = {
         "entry_price": entry,
         "size": qty,
@@ -38,6 +43,9 @@ def submit_order(symbol: str, qty: int, side: str, bid: float, ask: float):
     # Send hotkey FIRST for buy orders (entry) - before any logging or recording
     if side.lower() == "buy":
         trigger_hotkey("buy_ask")
+        # Announce new trade with robotic voice
+        price = round(ask, 2)
+        announce_new_trade(symbol, price)
     
     price = round(bid if side == "sell" else ask, 2)
     logger.info(f"[{symbol}] (SIM) {side.upper()} order: qty={qty} @ ${price}")

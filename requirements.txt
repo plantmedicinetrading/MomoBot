@@ -5,3 +5,4 @@ eventlet
 flask-cors
 alpaca-py
 websockets
+pyttsx3

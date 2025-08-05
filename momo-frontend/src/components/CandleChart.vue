@@ -93,11 +93,12 @@ function drawBreakoutLines() {
   const timeframeColors = {
     '10s': '#FF6B6B', // Red
     '1m': '#4ECDC4',  // Teal
-    '5m': '#45B7D1'   // Blue
+    '5m': '#45B7D1',  // Blue
+    'custom': '#9C27B0' // Purple
   };
   
   // Draw breakout lines for each timeframe
-  const timeframes = ['10s', '1m', '5m'] as const;
+  const timeframes = ['10s', '1m', '5m', 'custom'] as const;
   timeframes.forEach((tf, index) => {
     const level = props.breakoutLevels[index];
     if (level !== null && level !== undefined) {
@@ -107,7 +108,7 @@ function drawBreakoutLines() {
         lineWidth: 2,
         lineStyle: 2, // Dashed
         axisLabelVisible: true,
-        title: `${tf} Breakout`
+        title: tf === 'custom' ? 'Custom Level' : `${tf} Breakout`
       });
       breakoutLines.push(line);
     }

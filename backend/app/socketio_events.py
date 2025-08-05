@@ -73,6 +73,11 @@ def register_socket_events(socketio):
                 "breakouts": [],
                 "last_quote": None
             }
+        else:
+            # Clear any existing custom level entry when switching to a symbol
+            if "custom_level_entry" in ticker_states[ticker]:
+                ticker_states[ticker]["custom_level_entry"].update_level(None)
+                print(f"[{ticker}] 🧹 Cleared existing custom level when switching to symbol")
         #print(f"ticker_states keys after select: {list(ticker_states.keys())}")
         #print(f"ticker_states id in select: {id(ticker_states)}")
         #print("state module object in select:", sys.modules.get('app.state'))
@@ -114,13 +119,44 @@ def register_socket_events(socketio):
     def handle_set_entry_type(data):
         symbol = data.get("symbol", "").upper()
         entry_type = data.get("entry_type", "").lower()
-        if symbol and entry_type in ["10s", "1m", "5m", "none"]:
+        if symbol and entry_type in ["10s", "1m", "5m", "custom", "none"]:
             ticker_states[symbol]["active_entry_type"] = None if entry_type == "none" else entry_type
+            
+            # Clear custom level if switching away from custom entry type
+            if entry_type != "custom" and "custom_level_entry" in ticker_states[symbol]:
+                ticker_states[symbol]["custom_level_entry"].update_level(None)
+                print(f"[{symbol}] 🧹 Cleared custom level when switching to {entry_type}")
+            
             print(f"[{symbol}] 🔁 Active entry type set to: {ticker_states[symbol]['active_entry_type']}")
             print(f"[SOCKETIO] active_entry_type for {symbol} is now: {ticker_states[symbol]['active_entry_type']}")
             socketio.emit("entry_type_set", {"symbol": symbol, "entry_type": ticker_states[symbol]["active_entry_type"] or "none"})
         else:
             print(f"⚠️ Invalid entry type or symbol: {entry_type}, {symbol}")
+
+    @socketio.on("set_custom_level")
+    def handle_set_custom_level(data):
+        symbol = data.get("symbol", "").upper()
+        custom_level = data.get("level")
+        
+        if symbol and custom_level is not None:
+            try:
+                custom_level = float(custom_level)
+                # Validate that the level is positive
+                if custom_level <= 0:
+                    print(f"⚠️ Custom level must be positive: {custom_level}")
+                    return
+                    
+                state = ticker_states.get(symbol)
+                if state and "custom_level_entry" in state:
+                    state["custom_level_entry"].update_level(custom_level)
+                    print(f"[{symbol}] 🔧 Custom level updated to ${custom_level:.2f}")
+                    socketio.emit("custom_level_set", {"symbol": symbol, "level": custom_level})
+                else:
+                    print(f"⚠️ No custom level entry tracker found for {symbol}")
+            except ValueError:
+                print(f"⚠️ Invalid custom level value: {custom_level}")
+        else:
+            print(f"⚠️ Invalid symbol or level: {symbol}, {custom_level}")
 
     @socketio.on("request_candles")
     def handle_request_candles(data):

@@ -7,7 +7,7 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-HOTKEY_SERVER_URL = "ws://192.168.1.11:8765"
+HOTKEY_SERVER_URL = "ws://192.168.1.28:8765"
 
 async def send_hotkey(action: str) -> bool:
     """

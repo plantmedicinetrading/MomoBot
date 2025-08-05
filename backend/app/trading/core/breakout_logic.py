@@ -7,8 +7,10 @@ import sys
 import backend.app.shared_state as shared_state
 from ..pullbacks.tracker import PullbackTracker, Candle
 from ..core.trade_monitor import check_trade_targets  # ✅ Ensure correct import
+from ..core.trade_manager import handle_breakout_trigger
 from ..core.execution import submit_bracket_order
 from ..core.candle_builder import handle_new_quote
+from ..entries.custom_level import CustomLevelEntry
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +67,32 @@ def process_quote_for_breakout(symbol, quote):
             state["pullback_tracker_5m"] = PullbackTracker(symbol, interval="5m")
         tracker = state["pullback_tracker_5m"]
         breakout_hit = tracker.check_tick_for_entry(symbol, midpoint, bid, ask)
+        position = state.get("position")
+        if position:
+            try:
+                check_trade_targets(symbol, midpoint, bid, ask)
+            except Exception as e:
+                logger.exception(f"[{symbol}] Failed to check trade targets", exc_info=e)
+    elif entry_type == "custom":
+        # Get or create custom level entry tracker
+        if "custom_level_entry" not in state:
+            # Default to None to avoid unwanted entries
+            state["custom_level_entry"] = CustomLevelEntry(symbol, None)
+            logger.info(f"[{symbol}] Created custom level entry with no default level")
+            # Emit initial breakout levels
+            state["custom_level_entry"].emit_breakout_levels()
+        
+        tracker = state["custom_level_entry"]
+        breakout_hit = tracker.check_tick_for_entry(symbol, midpoint, bid, ask)
+        
+        # Handle breakout if triggered
+        if breakout_hit:
+            logger.info(f"[{symbol}] Custom level breakout triggered at ${midpoint:.2f}")
+            try:
+                handle_breakout_trigger(symbol, midpoint, "custom", bid, ask)
+            except Exception as e:
+                logger.exception(f"[{symbol}] Failed to handle custom level breakout", exc_info=e)
+        
         position = state.get("position")
         if position:
             try:

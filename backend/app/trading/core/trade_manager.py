@@ -59,8 +59,7 @@ def handle_breakout_trigger(symbol: str, entry_price: float, entry_type: str, bi
         "tp1_order_id": None,
         "tp2_order_id": None,
         "sl_order_id": None,
-        "half_closed": False,
-        "entry_timestamp": get_eastern_time()  # Track when trade was taken for wash trade protection
+        "half_closed": False
     }
 
     # Optionally disable further breakout triggers for this entry type

@@ -43,6 +43,30 @@
             />
           </td>
         </tr>
+        <tr v-if="entryType === 'Custom Level'">
+          <th>Custom Level</th>
+          <td>
+            <n-input
+              v-model:value="customLevel"
+              placeholder="Enter price level (e.g. 10.50)"
+              @keyup.enter="setCustomLevel"
+              type="number"
+              step="0.01"
+              class="custom-level-input"
+            />
+            <n-button 
+              type="primary" 
+              size="small" 
+              @click="setCustomLevel"
+              class="mt-1"
+            >
+              Set Level
+            </n-button>
+            <div v-if="currentCustomLevel" class="mt-1">
+              <n-tag type="info">Current: ${{ currentCustomLevel }}</n-tag>
+            </div>
+          </td>
+        </tr>
       </tbody>
       <tbody v-else>
         <tr>
@@ -81,7 +105,9 @@ export default {
     const ticker = ref('')
     const currentTicker = ref<string | null>(null)
     const entryType = ref('')
-    const entryTypes = ['None', '10 Sec PB', '1 Min PB', '5 Min PB']
+    const customLevel = ref('')
+    const currentCustomLevel = ref<string>('')
+    const entryTypes = ['None', '10 Sec PB', '1 Min PB', '5 Min PB', 'Custom Level']
 
     const livePrice = ref<{
       ticker: string
@@ -113,8 +139,14 @@ export default {
         if (newValue === '10 Sec PB') mapped = '10s'
         else if (newValue === '1 Min PB') mapped = '1m'
         else if (newValue === '5 Min PB') mapped = '5m'
+        else if (newValue === 'Custom Level') mapped = 'custom'
         else if (newValue === 'None') mapped = 'none'
         if (mapped !== '') {
+          // Clear custom level input when switching away from Custom Level
+          if (newValue !== 'Custom Level') {
+            customLevel.value = ''
+            currentCustomLevel.value = ''
+          }
           socket.emit('set_entry_type', {
             symbol: currentTicker.value,
             entry_type: mapped
@@ -163,7 +195,16 @@ export default {
           if (data.entry_type === '10s') label = '10 Sec PB'
           else if (data.entry_type === '1m') label = '1 Min PB'
           else if (data.entry_type === '5m') label = '5 Min PB'
+          else if (data.entry_type === 'custom') label = 'Custom Level'
           entryType.value = label
+        }
+      })
+
+      // Listen for custom level updates
+      socket.on('custom_level_set', (data: any) => {
+        if (data.symbol === currentTicker.value) {
+          console.log(`✅ Custom level set to $${data.level}`)
+          currentCustomLevel.value = data.level.toFixed(2)
         }
       })
     })
@@ -172,6 +213,17 @@ export default {
       if (!ticker.value) return
       socket.emit('select_ticker', ticker.value)
       emit('symbol-selected', ticker.value)
+    }
+
+    const setCustomLevel = () => {
+      if (!customLevel.value || !currentTicker.value) return
+      const level = parseFloat(customLevel.value)
+      if (isNaN(level)) return
+      
+      socket.emit('set_custom_level', {
+        symbol: currentTicker.value,
+        level: level
+      })
     }
 
     const colorClass = (type: 'ask' | 'bid') => {
@@ -202,6 +254,9 @@ export default {
       flashClass,
       entryType,
       entryTypes,
+      customLevel,
+      setCustomLevel,
+      currentCustomLevel,
     }
   }
 }
@@ -246,5 +301,11 @@ export default {
 @keyframes flashFade {
   0% { background-color: #fffae6; }
   100% { background-color: transparent; }
+}
+.custom-level-input {
+  width: 100%;
+}
+.mt-1 {
+  margin-top: 0.25rem;
 }
 </style>

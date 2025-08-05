@@ -7,7 +7,7 @@ breakout_ready = False
 
 def default_symbol_state():
     return {
-        "active_entry_type": None,  # "10s", "1m", or "5m"
+        "active_entry_type": None,  # "10s", "1m", "5m", or "custom"
         "position": None,           # Active position info
         "candles_10s": [],
         "current_candle_10s": None,

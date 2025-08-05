@@ -157,6 +157,15 @@ class PullbackTracker:
                 levels.append(None)
                 logger.info(f"📊 {self.symbol} {interval} breakout level: None (level: {tracker.last_breakout_level if tracker else None}, triggered: {tracker.breakout_triggered if tracker else False})")
         
+        # Add custom level if it exists
+        custom_tracker = state.get('custom_level_entry')
+        if custom_tracker and custom_tracker.custom_level is not None and not custom_tracker.entry_triggered:
+            levels.append(custom_tracker.custom_level)
+            logger.info(f"📊 {self.symbol} custom breakout level: {custom_tracker.custom_level}")
+        else:
+            levels.append(None)
+            logger.info(f"📊 {self.symbol} custom breakout level: None")
+        
         # Emit to frontend
         socketio = get_socketio()
         if socketio:

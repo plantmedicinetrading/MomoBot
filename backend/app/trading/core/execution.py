@@ -24,8 +24,7 @@ def submit_bracket_order(symbol: str, entry: float, qty: int, tp1: float, tp2: f
         "tp1_hit": False,
         "tp2_hit": False,
         "sl_hit": False,
-        "order_id": None,
-        "entry_timestamp": datetime.utcnow()  # Track when trade was taken for wash trade protection
+        "order_id": None
     }
     # Optionally record to DB
     insert_execution({
